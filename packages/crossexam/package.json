@@ -1,0 +1,17 @@
+{
+  "name": "@ripplewitness/crossexam",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "echo '@ripplewitness/crossexam: dev lands with its owning task'"
+  },
+  "dependencies": {
+    "@ripplewitness/core": "workspace:^",
+    "zod": "3.23.8"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "id": "reports-after-two",
+  "group": "reports",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout",
+    "route:GET /reports/sales"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-2",
+            "qty": 1
+          }
+        ]
+      },
+      "capture": {
+        "c1": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{c1}}",
+        "user": "regular-1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-3",
+            "qty": 2
+          }
+        ]
+      },
+      "capture": {
+        "c2": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{c2}}",
+        "user": "regular-1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/reports/sales",
+      "headers": {
+        "authorization": "Bearer reports-token"
+      }
+    }
+  ]
+}

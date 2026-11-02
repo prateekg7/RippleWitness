@@ -1,0 +1,15 @@
+AGENTS.md
+ARCHITECTURE.md
+AUDIT.md
+effort_plan.md
+PRD.md
+TASKS.md
+TESTS_AND_BUGS.md
+TRD.md
+# RippleWitness (A-01 scaffold)
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.ripplewitness/

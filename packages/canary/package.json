@@ -1,0 +1,19 @@
+{
+  "name": "@ripplewitness/canary",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "echo '@ripplewitness/canary: dev lands with its owning task'"
+  },
+  "dependencies": {
+    "@ripplewitness/replay": "workspace:^",
+    "execa": "9.5.2",
+    "ts-morph": "24.0.0",
+    "zod": "3.23.8"
+  }
+}

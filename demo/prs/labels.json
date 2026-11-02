@@ -1,0 +1,215 @@
+{
+  "_note": "Designed expectations for hand-authored Tier-1 patches (AGENTS A5b). To be confirmed by brute-force replay in RW-25 (H-01); RW-25 overwrites 'confirmed' only, never edits 'designed'.",
+  "base": "demo/shop-api @ working tree (seed.db committed separately)",
+  "prs": [
+    {
+      "id": "PR-00",
+      "patch": "PR-00.patch",
+      "title": "Add VIP discount to checkout",
+      "files": [
+        "src/app.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /reports/sales"
+        ],
+        "note": "checkout emits string-keyed discount.applied; dormant reports subscriber reacts. Extractor must not resolve it."
+      },
+      "confirmed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /reports/sales"
+        ],
+        "note": "Brute-force 2026-11-02: orders/:id unaffected (detail scenario uses regular-1; discount is VIP-only). Designed orders/:id was wrong; confirmed is ground truth."
+      }
+    },
+    {
+      "id": "PR-01",
+      "patch": "PR-01.patch",
+      "title": "Comment/whitespace only",
+      "files": [
+        "src/lib/money.ts"
+      ],
+      "designed": {
+        "observed": [],
+        "surprise": [],
+        "note": "Metamorphic: zero observed changes (IT-REP-02)."
+      },
+      "confirmed": {
+        "observed": [],
+        "surprise": [],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    },
+    {
+      "id": "PR-02",
+      "tier": "T2",
+      "patch": "PR-02.patch",
+      "title": "Rename shippingFor to shippingQuote (pure refactor)",
+      "files": [
+        "src/app.ts",
+        "src/app.test.ts"
+      ],
+      "designed": {
+        "observed": [],
+        "surprise": [],
+        "note": "Tier-2, authored for IT-REP-03 metamorphic only."
+      },
+      "confirmed": {
+        "observed": [],
+        "surprise": [],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    },
+    {
+      "id": "PR-03",
+      "patch": "PR-03.patch",
+      "title": "Add POST /discounts/validate",
+      "files": [
+        "src/app.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:POST /discounts/validate"
+        ],
+        "surprise": [],
+        "note": "New route is DIFF; base returns 404 via discounts-validate scenario."
+      },
+      "confirmed": {
+        "observed": [
+          "route:POST /discounts/validate"
+        ],
+        "surprise": [],
+        "note": "Brute-force 2026-11-02: matches designed (404->200)."
+      }
+    },
+    {
+      "id": "PR-04",
+      "patch": "PR-04.patch",
+      "title": "roundMoney rounding mode floor to ceil",
+      "files": [
+        "src/lib/money.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "note": "Totals gain 1 cent. Only /checkout is statically impacted (roundMoney has no db/config adjacency); orders+reports are beyond-cap SURPRISE per TESTS_AND_BUGS PR-04."
+      },
+      "confirmed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    },
+    {
+      "id": "PR-05",
+      "patch": "PR-05.patch",
+      "title": "SHIPPING_FLAT default 500 to 750",
+      "files": [
+        "src/config.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /shipping/quote",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "note": "Config coupling reaches checkout+shipping statically; orders+reports are one sharing hop further, hence SURPRISE (same beyond-cap treatment as PR-04)."
+      },
+      "confirmed": {
+        "observed": [
+          "route:POST /checkout",
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /shipping/quote",
+          "route:GET /reports/sales"
+        ],
+        "surprise": [
+          "route:GET /orders",
+          "route:GET /orders/:id",
+          "route:GET /reports/sales"
+        ],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    },
+    {
+      "id": "PR-07",
+      "patch": "PR-07.patch",
+      "title": "Default pagination on /products",
+      "files": [
+        "src/app.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:GET /products"
+        ],
+        "surprise": [],
+        "note": "Response shape change; API_COMPAT no-breaking-change claim is CONTRADICTED."
+      },
+      "confirmed": {
+        "observed": [
+          "route:GET /products"
+        ],
+        "surprise": [],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    },
+    {
+      "id": "PR-09",
+      "patch": "PR-09.patch",
+      "title": "Remove auth check on /reports/sales",
+      "files": [
+        "src/app.ts"
+      ],
+      "designed": {
+        "observed": [
+          "route:GET /reports/sales"
+        ],
+        "surprise": [],
+        "note": "401 to 200 on no-token scenarios; handler is in-diff so CONFIRMED."
+      },
+      "confirmed": {
+        "observed": [
+          "route:GET /reports/sales"
+        ],
+        "surprise": [],
+        "note": "Brute-force 2026-11-02: matches designed."
+      }
+    }
+  ]
+}

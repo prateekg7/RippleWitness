@@ -1,0 +1,30 @@
+{
+  "id": "cart-subtotal",
+  "group": "cart",
+  "routeIds": [
+    "route:POST /cart",
+    "route:GET /cart/:id"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-2",
+            "qty": 2
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/cart/{{cartId}}"
+    }
+  ]
+}

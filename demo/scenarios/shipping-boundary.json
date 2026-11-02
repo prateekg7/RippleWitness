@@ -1,0 +1,17 @@
+{
+  "id": "shipping-boundary",
+  "group": "shipping",
+  "routeIds": [
+    "route:GET /shipping/quote"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/shipping/quote?subtotal=4999"
+    },
+    {
+      "method": "GET",
+      "path": "/shipping/quote?subtotal=5000"
+    }
+  ]
+}

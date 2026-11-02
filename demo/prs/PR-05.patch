@@ -1,0 +1,11 @@
+diff --git a/src/config.ts b/src/config.ts
+index 718de12..b30d1be 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -1,5 +1,5 @@
+ export const config = {
+-  shippingFlatCents: Number(process.env.SHIPPING_FLAT ?? 500),
++  shippingFlatCents: Number(process.env.SHIPPING_FLAT ?? 750),
+   freeShippingThresholdCents: 5000,
+   reportsToken: "reports-token",
+ } as const;

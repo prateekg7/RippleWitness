@@ -1,0 +1,11 @@
+{
+  "id": "routes-list",
+  "group": "health",
+  "routeIds": [],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/__routes"
+    }
+  ]
+}

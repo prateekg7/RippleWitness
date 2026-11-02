@@ -1,0 +1,54 @@
+diff --git a/src/app.test.ts b/src/app.test.ts
+index f999ad0..0213dae 100644
+--- a/src/app.test.ts
++++ b/src/app.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from "vitest";
+ import { roundMoney } from "./lib/money.js";
+-import { isReportsAuthorized, shippingFor } from "./app.js";
++import { isReportsAuthorized, shippingQuote } from "./app.js";
+ import { config } from "./config.js";
+ 
+ describe("shop-api helpers", () => {
+@@ -9,8 +9,8 @@ describe("shop-api helpers", () => {
+     expect(roundMoney(100.5)).toBe(101);
+   });
+   it("shipping is flat below threshold, free above", () => {
+-    expect(shippingFor(100)).toBe(500);
+-    expect(shippingFor(5000)).toBe(0);
++    expect(shippingQuote(100)).toBe(500);
++    expect(shippingQuote(5000)).toBe(0);
+   });
+   it("reports auth accepts the configured bearer value, rejects the rest", () => {
+     const good = ["Bearer", config.reportsToken].join(" ");
+diff --git a/src/app.ts b/src/app.ts
+index 1fd73cb..621a98f 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -24,7 +24,7 @@ export function cartSubtotal(db: Db, cartId: string): number {
+   return rows.reduce((sum, r) => sum + r.qty * r.price_cents, 0);
+ }
+ 
+-export function shippingFor(subtotalCents: number): number {
++export function shippingQuote(subtotalCents: number): number {
+   return subtotalCents >= config.freeShippingThresholdCents ? 0 : config.shippingFlatCents;
+ }
+ 
+@@ -76,7 +76,7 @@ export function createApp(dbPath = process.env.DB_PATH ?? ":memory:"): Express {
+     const cart = db.prepare("SELECT id FROM carts WHERE id = ?").get(cartId);
+     if (!cart) return res.status(404).json({ error: "cart_not_found" });
+     const subtotal = cartSubtotal(db, cartId);
+-    const shipping = shippingFor(subtotal);
++    const shipping = shippingQuote(subtotal);
+     const total = roundMoney(subtotal + shipping);
+     const orderId = nextId();
+     db.prepare("INSERT INTO orders (id, user_id, total_cents, created_at) VALUES (?, ?, ?, ?)").run(
+@@ -99,7 +99,7 @@ export function createApp(dbPath = process.env.DB_PATH ?? ":memory:"): Express {
+   });
+   app.get("/shipping/quote", (req: Request, res: Response) => {
+     const subtotal = Number(req.query.subtotal ?? 0);
+-    res.json({ subtotal, shipping: shippingFor(subtotal) });
++    res.json({ subtotal, shipping: shippingQuote(subtotal) });
+   });
+   app.get("/inventory/:sku", (req: Request, res: Response) => {
+     const row = db.prepare("SELECT sku, stock FROM inventory WHERE sku = ?").get(req.params.sku);

@@ -1,0 +1,13 @@
+{
+  "id": "orders-get-missing",
+  "group": "orders",
+  "routeIds": [
+    "route:GET /orders/:id"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/orders/id-42-999"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "checkout-empty-cart",
+  "group": "checkout",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": []
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{cartId}}",
+        "user": "regular-1"
+      }
+    }
+  ]
+}

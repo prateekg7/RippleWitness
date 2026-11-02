@@ -1,0 +1,16 @@
+{
+  "id": "payments-charge-large",
+  "group": "payments",
+  "routeIds": [
+    "route:POST /payments/charge"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/payments/charge",
+      "body": {
+        "amount": 99999
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "checkout-big-mixed",
+  "group": "checkout",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "vip-1",
+        "items": [
+          {
+            "sku": "SKU-1",
+            "qty": 3
+          },
+          {
+            "sku": "SKU-2",
+            "qty": 2
+          },
+          {
+            "sku": "SKU-3",
+            "qty": 5
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{cartId}}",
+        "user": "vip-1"
+      }
+    }
+  ]
+}

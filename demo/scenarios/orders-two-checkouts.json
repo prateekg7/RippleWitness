@@ -1,0 +1,63 @@
+{
+  "id": "orders-two-checkouts",
+  "group": "orders",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout",
+    "route:GET /orders"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-3",
+            "qty": 1
+          }
+        ]
+      },
+      "capture": {
+        "c1": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{c1}}",
+        "user": "regular-1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "vip-1",
+        "items": [
+          {
+            "sku": "SKU-1",
+            "qty": 1
+          }
+        ]
+      },
+      "capture": {
+        "c2": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{c2}}",
+        "user": "vip-1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/orders"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "cart-create-empty",
+  "group": "cart",
+  "routeIds": [
+    "route:POST /cart"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": []
+      }
+    }
+  ]
+}

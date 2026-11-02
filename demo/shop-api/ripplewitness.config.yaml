@@ -1,0 +1,8 @@
+repo:
+  appStart: "corepack pnpm start"
+  healthPath: "/health"
+  testCommand: "corepack pnpm test"
+replay:
+  scenariosDir: demo/scenarios
+  mask: ["$..createdAt", "$..requestId"]
+gate: { minRecall: 0.75, minPrecision: 0.50 }

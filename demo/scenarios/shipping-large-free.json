@@ -1,0 +1,13 @@
+{
+  "id": "shipping-large-free",
+  "group": "shipping",
+  "routeIds": [
+    "route:GET /shipping/quote"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/shipping/quote?subtotal=6000"
+    }
+  ]
+}

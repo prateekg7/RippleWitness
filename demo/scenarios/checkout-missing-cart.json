@@ -1,0 +1,17 @@
+{
+  "id": "checkout-missing-cart",
+  "group": "checkout",
+  "routeIds": [
+    "route:POST /checkout"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "id-42-999",
+        "user": "vip-1"
+      }
+    }
+  ]
+}

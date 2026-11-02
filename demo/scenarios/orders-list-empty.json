@@ -1,0 +1,13 @@
+{
+  "id": "orders-list-empty",
+  "group": "orders",
+  "routeIds": [
+    "route:GET /orders"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/orders"
+    }
+  ]
+}

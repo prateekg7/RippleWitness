@@ -1,0 +1,16 @@
+{
+  "id": "reports-authed-empty",
+  "group": "reports",
+  "routeIds": [
+    "route:GET /reports/sales"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/reports/sales",
+      "headers": {
+        "authorization": "Bearer reports-token"
+      }
+    }
+  ]
+}

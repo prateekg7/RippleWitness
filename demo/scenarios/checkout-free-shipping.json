@@ -1,0 +1,34 @@
+{
+  "id": "checkout-free-shipping",
+  "group": "checkout",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-2",
+            "qty": 4
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{cartId}}",
+        "user": "regular-1"
+      }
+    }
+  ]
+}

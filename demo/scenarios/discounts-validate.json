@@ -1,0 +1,17 @@
+{
+  "id": "discounts-validate",
+  "group": "discounts",
+  "routeIds": ["route:POST /discounts/validate"],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/discounts/validate",
+      "body": { "code": "VIP10" }
+    },
+    {
+      "method": "POST",
+      "path": "/discounts/validate",
+      "body": { "code": "NOPE" }
+    }
+  ]
+}

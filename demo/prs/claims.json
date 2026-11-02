@@ -1,0 +1,165 @@
+{
+  "_note": "20 seeded claims for E3 (10 true / 10 false). 'expected' verdicts assume the designed labels in labels.json; RW-25 re-checks against brute-force replay.",
+  "claims": [
+    {
+      "id": "C01",
+      "pr": "PR-00",
+      "text": "Only touches checkout.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:POST /checkout"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C02",
+      "pr": "PR-00",
+      "text": "Checkout, orders and reports behavior changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:POST /checkout", "route:GET /orders", "route:GET /reports/sales"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C03",
+      "pr": "PR-00",
+      "text": "Added vipDiscount for VIP buyers.",
+      "type": "IMPLEMENTED",
+      "params": { "symbol": "vipDiscount" },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C04",
+      "pr": "PR-00",
+      "text": "No other endpoint behavior changes.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:GET /reports/sales"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C05",
+      "pr": "PR-01",
+      "text": "Nothing else changes.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:GET /products", "route:POST /checkout"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C06",
+      "pr": "PR-01",
+      "text": "Checkout totals changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:POST /checkout"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C07",
+      "pr": "PR-03",
+      "text": "Added POST /discounts/validate.",
+      "type": "IMPLEMENTED",
+      "params": { "route": "route:POST /discounts/validate" },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C08",
+      "pr": "PR-03",
+      "text": "Checkout behavior is unchanged.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:POST /checkout"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C09",
+      "pr": "PR-04",
+      "text": "Only the rounding helper changed; totals are unaffected.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:POST /checkout"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C10",
+      "pr": "PR-04",
+      "text": "Checkout and orders totals changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:POST /checkout", "route:GET /orders"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C11",
+      "pr": "PR-05",
+      "text": "Shipping default changed; checkout totals changed with it.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:GET /shipping/quote", "route:POST /checkout"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C12",
+      "pr": "PR-05",
+      "text": "Reports are unaffected.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:GET /reports/sales"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C13",
+      "pr": "PR-07",
+      "text": "Products listing is unchanged.",
+      "type": "BEHAVIOR_UNCHANGED",
+      "params": { "routes": ["route:GET /products"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C14",
+      "pr": "PR-07",
+      "text": "Only the products response changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:GET /products"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C15",
+      "pr": "PR-09",
+      "text": "Reports auth behavior changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:GET /reports/sales"] },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C16",
+      "pr": "PR-09",
+      "text": "Checkout totals changed.",
+      "type": "SCOPE",
+      "params": { "routes": ["route:POST /checkout"] },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C17",
+      "pr": "PR-03",
+      "text": "Added bulkDiscount helper.",
+      "type": "IMPLEMENTED",
+      "params": { "symbol": "bulkDiscount" },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C18",
+      "pr": "PR-07",
+      "text": "No breaking API changes.",
+      "type": "API_COMPAT",
+      "params": { "breaking": false },
+      "expected": "CONTRADICTED"
+    },
+    {
+      "id": "C19",
+      "pr": "PR-01",
+      "text": "No breaking API changes.",
+      "type": "API_COMPAT",
+      "params": { "breaking": false },
+      "expected": "SUPPORTED"
+    },
+    {
+      "id": "C20",
+      "pr": "PR-09",
+      "text": "Added rate limiting to reports.",
+      "type": "IMPLEMENTED",
+      "params": { "symbol": "rateLimiter" },
+      "expected": "CONTRADICTED"
+    }
+  ]
+}

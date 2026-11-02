@@ -1,0 +1,9 @@
+diff --git a/src/lib/money.ts b/src/lib/money.ts
+index 09dea18..04395c1 100644
+--- a/src/lib/money.ts
++++ b/src/lib/money.ts
+@@ -1,3 +1,3 @@
+ export function roundMoney(cents: number): number {
+-  return Math.floor(cents + 0.5);
++  return Math.ceil(cents + 0.5);
+ }

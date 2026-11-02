@@ -1,0 +1,13 @@
+{
+  "id": "cart-get-missing",
+  "group": "cart",
+  "routeIds": [
+    "route:GET /cart/:id"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/cart/id-42-999"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+diff --git a/src/app.ts b/src/app.ts
+index 1fd73cb..c79acdf 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -45,9 +45,10 @@ export function createApp(dbPath = process.env.DB_PATH ?? ":memory:"): Express {
+     if ((process.env.EXTERNAL_MODE ?? "mock") !== "mock") return res.status(404).json({ error: "not_found" });
+     return res.json({ routes: ROUTES });
+   });
+-  app.get("/products", (_req: Request, res: Response) => {
+-    const rows = db.prepare("SELECT sku, name, price_cents FROM products ORDER BY sku").all();
+-    res.json({ products: rows });
++  app.get("/products", (req: Request, res: Response) => {
++    const all = db.prepare("SELECT sku, name, price_cents FROM products ORDER BY sku").all();
++    const limit = Number(req.query.limit ?? 2);
++    res.json({ products: all.slice(0, limit), page: { limit, total: all.length } });
+   });
+   app.get("/products/:sku", (req: Request, res: Response) => {
+     const row = db.prepare("SELECT sku, name, price_cents FROM products WHERE sku = ?").get(req.params.sku);

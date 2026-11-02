@@ -1,0 +1,22 @@
+diff --git a/src/app.ts b/src/app.ts
+index 1fd73cb..92738f4 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -116,6 +116,11 @@ export function createApp(dbPath = process.env.DB_PATH ?? ":memory:"): Express {
+     };
+     return res.json({ total: row.total_cents, orders: row.orders_count });
+   });
++  app.post("/discounts/validate", (req: Request, res: Response) => {
++    const body = req.body as { code?: string };
++    if (body.code === "VIP10") return res.json({ valid: true, percent: 10 });
++    return res.json({ valid: false, percent: 0 });
++  });
+   app.post("/payments/charge", (req: Request, res: Response) => {
+     const body = req.body as { amount?: number };
+     const result = chargeExternal(body.amount ?? 0);
+@@ -137,4 +142,5 @@ export const ROUTES = [
+   "route:GET /inventory/:sku",
+   "route:GET /reports/sales",
+   "route:POST /payments/charge",
++  "route:POST /discounts/validate",
+ ];

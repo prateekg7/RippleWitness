@@ -1,0 +1,34 @@
+{
+  "id": "checkout-single-cable",
+  "group": "checkout",
+  "routeIds": [
+    "route:POST /cart",
+    "route:POST /checkout"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "vip-1",
+        "items": [
+          {
+            "sku": "SKU-3",
+            "qty": 1
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{cartId}}",
+        "user": "vip-1"
+      }
+    }
+  ]
+}

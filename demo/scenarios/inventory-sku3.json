@@ -1,0 +1,13 @@
+{
+  "id": "inventory-sku3",
+  "group": "inventory",
+  "routeIds": [
+    "route:GET /inventory/:sku"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/inventory/SKU-3"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "reports-no-auth",
+  "group": "reports",
+  "routeIds": [
+    "route:GET /reports/sales"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/reports/sales"
+    }
+  ]
+}

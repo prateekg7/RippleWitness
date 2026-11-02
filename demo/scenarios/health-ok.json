@@ -1,0 +1,13 @@
+{
+  "id": "health-ok",
+  "group": "health",
+  "routeIds": [
+    "route:GET /health"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/health"
+    }
+  ]
+}

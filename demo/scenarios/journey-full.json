@@ -1,0 +1,52 @@
+{
+  "id": "journey-full",
+  "group": "journey",
+  "routeIds": [
+    "route:GET /products",
+    "route:POST /cart",
+    "route:POST /checkout",
+    "route:GET /orders",
+    "route:GET /reports/sales"
+  ],
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/products"
+    },
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "vip-1",
+        "items": [
+          {
+            "sku": "SKU-1",
+            "qty": 1
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/checkout",
+      "body": {
+        "cartId": "{{cartId}}",
+        "user": "vip-1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/orders"
+    },
+    {
+      "method": "GET",
+      "path": "/reports/sales",
+      "headers": {
+        "authorization": "Bearer reports-token"
+      }
+    }
+  ]
+}

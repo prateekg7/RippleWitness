@@ -1,0 +1,38 @@
+{
+  "id": "cart-create-multi",
+  "group": "cart",
+  "routeIds": [
+    "route:POST /cart",
+    "route:GET /cart/:id"
+  ],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": {
+        "user": "regular-1",
+        "items": [
+          {
+            "sku": "SKU-1",
+            "qty": 1
+          },
+          {
+            "sku": "SKU-2",
+            "qty": 1
+          },
+          {
+            "sku": "SKU-3",
+            "qty": 4
+          }
+        ]
+      },
+      "capture": {
+        "cartId": "$.id"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/cart/{{cartId}}"
+    }
+  ]
+}
