@@ -1,3 +1,5 @@
+# Example of the planned config schema (TRD §10, PRD F-14 — deferred in v1).
+# No v1 code reads this file; it documents the target for a later release.
 repo:
   appStart: "corepack pnpm start"
   healthPath: "/health"
