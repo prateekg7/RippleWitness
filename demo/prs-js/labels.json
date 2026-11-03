@@ -1,0 +1,15 @@
+{
+  "prs": [
+    {
+      "id": "PR-JS-00",
+      "patch": "PR-JS-00.patch",
+      "title": "Add VIP discount to checkout (JS subject)",
+      "files": ["src/app.js"],
+      "designed": {
+        "observed": ["route:POST /checkout", "route:GET /orders", "route:GET /reports/sales"],
+        "surprise": ["route:GET /reports/sales"],
+        "note": "Same change as TS PR-00 on the JS port; designed set uses PR-00's confirmed ground truth (orders/:id unaffected)."
+      }
+    }
+  ]
+}

@@ -7,7 +7,7 @@
     "ripplewitness": "src/cli.ts"
   },
   "scripts": {
-    "dev": "echo '@ripplewitness/server: serve lands in RW-12 (C-06); run doctor via tests for now'"
+    "dev": "tsx src/cli.ts serve"
   },
   "dependencies": {
     "@ripplewitness/agents": "workspace:^",
@@ -20,12 +20,14 @@
     "better-sqlite3": "11.7.0",
     "execa": "9.5.2",
     "express": "4.21.2",
+    "yaml": "^2.9.1",
     "zod": "3.23.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.12",
     "@types/express": "4.17.21",
     "@types/supertest": "6.0.2",
-    "supertest": "7.0.0"
+    "supertest": "7.0.0",
+    "tsx": "4.19.2"
   }
 }

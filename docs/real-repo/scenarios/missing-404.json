@@ -1,0 +1,6 @@
+{
+  "id": "missing-404",
+  "group": "api",
+  "routeIds": ["route:GET /definitely-missing"],
+  "steps": [{ "method": "GET", "path": "/definitely-missing" }]
+}

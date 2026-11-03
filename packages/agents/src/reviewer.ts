@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MetaClient } from "./meta.js";
+import { DEFAULT_OUTPUT_TOKENS, type MetaCallContext, type MetaClient } from "./meta.js";
 
 export const FindingSchema = z.object({
   file: z.string().min(1),
@@ -70,7 +70,10 @@ export function validateFindings(
 }
 
 /** AI Reviewer (AGENTS B5). Blind-first gating is enforced by the server. */
-export async function runReviewer(client: MetaClient, diff: string): Promise<AiFinding[]> {
-  const out = await client.completeJson(SYSTEM, `<data>${diff.slice(0, DIFF_CHAR_LIMIT)}</data>`, FindingsSchema);
+export async function runReviewer(client: MetaClient, diff: string, ctx: MetaCallContext = {}): Promise<AiFinding[]> {
+  const out = await client.completeJson(SYSTEM, `<data>${diff.slice(0, DIFF_CHAR_LIMIT)}</data>`, FindingsSchema, DEFAULT_OUTPUT_TOKENS, {
+    ...ctx,
+    agent: "aiReviewer",
+  });
   return out.findings;
 }

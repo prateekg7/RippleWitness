@@ -48,6 +48,32 @@ describe("strict mode hook (E-05)", () => {
       loadOrCreateKey(home),
     );
     await writeNote(repo, "HEAD", JSON.stringify(receipt));
-    expect(await checkHead(repo, home)).toEqual({ ok: true });
+    // Pre-K-06 payload (no tier): passes with an explicit unknown-tier label.
+    expect(await checkHead(repo, home)).toEqual({ ok: true, tier: "unknown (pre-K-06 receipt)" });
+  });
+  it("CT-RC-05: tiered receipt surfaces its assurance tier", async () => {
+    const repo = await scratchRepo();
+    const home = mkdtempSync(join(tmpdir(), "rw-home-"));
+    const receipt = signReceipt(
+      {
+        runId: "r",
+        baseRef: "b",
+        headRef: "h",
+        diffHash: "d",
+        scenarioHash: "s",
+        prediction: {},
+        score: { recall: 1, precision: 1, passed: true, passReason: "t" },
+        overrideReason: null,
+        claims: [],
+        questions: [],
+        agentMode: "live_session",
+        createdAt: "2026-01-01T00:00:00Z",
+        assuranceTier: "L2",
+        artifactHashes: { "model.json": "sha256:abc" },
+      },
+      loadOrCreateKey(home),
+    );
+    await writeNote(repo, "HEAD", JSON.stringify(receipt));
+    expect(await checkHead(repo, home)).toEqual({ ok: true, tier: "L2" });
   });
 });

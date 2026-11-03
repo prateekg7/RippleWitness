@@ -5,3 +5,5 @@ export type { BuiltQuestion, QuestionInput, QuestionTemplate } from "./questions
 export { buildQuestions, pickNext, rephrasePassthrough, validatePhrased } from "./questions.js";
 export type { AnswerAssessment, QuestionStatus } from "./qa.js";
 export { MAX_ASKED_PER_REVIEW, MAX_ASKS_PER_QUESTION, assessAnswer, quotaAllows } from "./qa.js";
+export type { AblationCandidate, AblationKind, AblationVerdict } from "./ablation.js";
+export { dropEvent, findSubscriptions, planAblations, verdictAblation } from "./ablation.js";

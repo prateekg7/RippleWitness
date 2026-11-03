@@ -1,4 +1,10 @@
 export const PACKAGE_NAME = "@ripplewitness/graph" as const;
 export type { ChangedFile, EdgeConfidence, EdgeType, GraphEdge, GraphNode, ImpactResult, NodeKind, StaticGraph } from "./types.js";
+export type { ExtractOptions } from "./extract.js";
 export { extractStaticGraph } from "./extract.js";
+export type { SubjectLanguage } from "./language.js";
+export { detectLanguage } from "./language.js";
+export { extractPythonGraph } from "./python.js";
+export { extractGoGraph } from "./go.js";
 export { computeImpact } from "./impact.js";
+export { ExternalGraphSchema, parseExternalGraph } from "./external.js";

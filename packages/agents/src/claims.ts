@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MetaClient } from "./meta.js";
+import { DEFAULT_OUTPUT_TOKENS, type MetaCallContext, type MetaClient } from "./meta.js";
 
 export const ClaimSchema = z.object({
   type: z.enum(["SCOPE", "BEHAVIOR_UNCHANGED", "IMPLEMENTED", "TESTS", "API_COMPAT"]),
@@ -33,10 +33,11 @@ export async function extractClaims(
   client: MetaClient,
   agentMessage: string,
   knownRoutes: string[],
-  changedFiles: string[],
+  changedFiles: string[] = [],
+  ctx: MetaCallContext = {},
 ): Promise<ExtractedClaim[]> {
   const user = `KNOWN_ROUTES: ${knownRoutes.join(", ")}\nCHANGED_FILES: ${changedFiles.join(", ")}\n<data>${agentMessage}</data>`;
-  const out = await client.completeJson(SYSTEM, user, ClaimsSchema);
+  const out = await client.completeJson(SYSTEM, user, ClaimsSchema, DEFAULT_OUTPUT_TOKENS, { ...ctx, agent: "claimExtractor" });
   const known = new Set(knownRoutes);
   return out.claims.map((c) => ({
     ...c,

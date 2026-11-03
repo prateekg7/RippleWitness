@@ -1,0 +1,6 @@
+{
+  "id": "health-probe",
+  "group": "api",
+  "routeIds": ["route:GET /health"],
+  "steps": [{ "method": "GET", "path": "/health" }]
+}

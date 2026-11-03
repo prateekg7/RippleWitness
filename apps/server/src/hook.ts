@@ -21,7 +21,7 @@ export function installHook(subjectRepo: string, ripplewitnessRoot: string): str
 export async function checkHead(
   subjectRepo: string,
   home: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; tier: string } | { ok: false; reason: string }> {
   const { stdout: head } = await execFileP("git", ["rev-parse", "HEAD"], { cwd: subjectRepo });
   const note = await readNote(subjectRepo, head.trim());
   if (!note) return { ok: false, reason: "no receipt note on HEAD (run RippleWitness and issue a receipt)" };
@@ -33,5 +33,8 @@ export async function checkHead(
   }
   const v = verifyReceipt(receipt, loadOrCreateKey(home));
   if (!v.ok) return { ok: false, reason: v.reason };
-  return { ok: true };
+  // Surface the assurance tier (K-06): verifiers must not present an
+  // L0/L1 receipt as execution-backed.
+  const tier = (receipt as { payload?: { assuranceTier?: unknown } }).payload?.assuranceTier;
+  return { ok: true, tier: typeof tier === "string" ? tier : "unknown (pre-K-06 receipt)" };
 }

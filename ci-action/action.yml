@@ -1,0 +1,26 @@
+name: ripplewitness-verify
+description: Fail the build when HEAD lacks a valid RippleWitness review receipt (F-13)
+inputs:
+  receipt-key-hex:
+    description: "Hex of the reviewer's .ripplewitness/key (store as a repo secret). Needed only for HMAC receipts."
+    required: false
+    default: ""
+  receipt-pubkey-pem:
+    description: "Contents of the reviewer's .ripplewitness/signing.pub (store as a repo variable — public). Needed only for ed25519 receipts."
+    required: false
+    default: ""
+  node-version:
+    description: Node.js version for the zero-dependency verifier
+    required: false
+    default: "22"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - shell: bash
+      env:
+        RIPPLEWITNESS_KEY_HEX: ${{ inputs.receipt-key-hex }}
+        RIPPLEWITNESS_PUBKEY_PEM: ${{ inputs.receipt-pubkey-pem }}
+      run: node "${{ github.action_path }}/verify-receipt.mjs" "${{ github.workspace }}"

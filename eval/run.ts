@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { aggregateByRoute, createWorktree, diffSteps, loadScenarios, removeWorktree, runReplay } from "@ripplewitness/replay";
-import { computeImpact, extractStaticGraph } from "@ripplewitness/graph";
+import { computeImpact, extractPythonGraph, extractStaticGraph } from "@ripplewitness/graph";
 import { verifyClaim } from "@ripplewitness/crossexam";
 import { proposeCanary, validateCanary } from "@ripplewitness/canary";
 
@@ -189,6 +189,142 @@ async function main(): Promise<void> {
     canaryLine = `${cand.operator} @${cand.file}:${cand.line} → ${v.accepted ? "ACCEPTED" : "REJECTED"} (${v.reason}; routes: ${v.changedRoutes.join(", ") || "∅"})`;
   }
   lines.push("## E5 — canary execution validation (single attempt)", "", `- ${canaryLine}`, "- Catch rate needs human trials; not measured here.", "");
+
+  // E6: polyglot replication — same protocol (observed-vs-designed +
+  // determinism double-run) on the JS and Python subjects' hero PRs.
+  lines.push("## E6 — polyglot replication (F-18/F-20)", "");
+  lines.push("| subject | PR | observed | designed | match | static routes | deterministic |");
+  lines.push("|---|---|---|---|---|---|---|");
+  const poly: { name: string; shop: string; prs: string; scen: string; pr: string; patch: string; extra: { language?: "python"; appStart?: string[] } }[] = [
+    { name: "js", shop: join(ROOT, "demo", "shop-api-js"), prs: join(ROOT, "demo", "prs-js"), scen: SCEN, pr: "PR-JS-00", patch: "PR-JS-00.patch", extra: {} },
+    { name: "py", shop: join(ROOT, "demo", "shop-api-py"), prs: join(ROOT, "demo", "prs-py"), scen: join(ROOT, "demo", "scenarios-py"), pr: "PR-PY-00", patch: "PR-PY-00.patch", extra: { language: "python", appStart: ["python3", "server.py"] } },
+  ];
+  for (const p of poly) {
+    const labels = JSON.parse(readFileSync(join(p.prs, "labels.json"), "utf8")) as {
+      prs: { id: string; designed: { observed: string[] } }[];
+    };
+    const designed = labels.prs.find((x) => x.id === p.pr)?.designed.observed ?? [];
+    const repo = mkdtempSync(join(tmpdir(), `rw-eval6-${p.name}-`));
+    cpSync(p.shop, repo, { recursive: true, filter: (s) => !s.includes("node_modules") && !s.includes(".git") && !s.includes(".venv") && !s.includes("__pycache__") });
+    const g = (args: string[]): Promise<string> => execa("git", args, { cwd: repo }).then((r) => r.stdout.trim()) as Promise<string>;
+    await g(["init", "-q", "-b", "main", "."]);
+    await g(["config", "user.email", "eval@local"]);
+    await g(["config", "user.name", "eval"]);
+    await g(["add", "-A"]);
+    await g(["commit", "-qm", "base"]);
+    const baseRef = await g(["rev-parse", "HEAD"]);
+    if (p.name === "js") {
+      const { symlinkSync } = await import("node:fs");
+      symlinkSync(join(p.shop, "node_modules"), join(repo, "node_modules"), "dir");
+    }
+    await g(["checkout", "-qb", p.pr]);
+    await execa("git", ["apply", join(p.prs, p.patch)], { cwd: repo });
+    await g(["add", "-A"]);
+    await g(["commit", "-qm", p.pr]);
+    const headRef = await g(["rev-parse", "HEAD"]);
+    const pscen = loadScenarios(p.scen);
+    const pmap = new Map(pscen.map((s) => [s.id, s.routeIds]));
+    const tol = new Map(pscen.map((s) => [s.id, s.tolerances ?? []]));
+    const rr = await runReplay({ repoPath: repo, baseRef, headRef, scenariosDir: p.scen, seedDbRel: "seed/seed.db", workRoot: mkdtempSync(join(tmpdir(), `rw-eval6r-${p.name}-`)), ...p.extra });
+    if (!rr.ok) {
+      lines.push(`| ${p.name} | ${p.pr} | REPLAY FAILED (${rr.error.stage}) | ${designed.join(", ")} | NO | — | — |`);
+      continue;
+    }
+    const sds = rr.base.steps.map((s, i) => diffSteps(s, rr.head.steps[i] as (typeof rr.head.steps)[number], { tolerances: tol.get(s.scenarioId) ?? [] }));
+    const observed = aggregateByRoute(sds, pmap).filter((x) => x.changed).map((x) => x.routeId).sort();
+    const wt6 = mkdtempSync(join(tmpdir(), `rw-eval6g-${p.name}-`));
+    await execa("rm", ["-rf", wt6]);
+    await createWorktree(repo, headRef, wt6);
+    const graph6 = p.name === "py" ? await extractPythonGraph(wt6) : extractStaticGraph(wt6);
+    await removeWorktree(repo, wt6);
+    const staticRoutes = graph6.nodes.filter((n) => n.kind === "route").map((n) => n.id).sort();
+    const dd1 = await runReplay({ repoPath: repo, baseRef, headRef: baseRef, scenariosDir: p.scen, seedDbRel: "seed/seed.db", workRoot: mkdtempSync(join(tmpdir(), `rw-eval6d1-${p.name}-`)), ...p.extra });
+    const dd2 = await runReplay({ repoPath: repo, baseRef, headRef: baseRef, scenariosDir: p.scen, seedDbRel: "seed/seed.db", workRoot: mkdtempSync(join(tmpdir(), `rw-eval6d2-${p.name}-`)), ...p.extra });
+    const det = dd1.ok && dd2.ok && JSON.stringify(dd1.base.steps) === JSON.stringify(dd2.base.steps);
+    const match = observed.length === designed.length && observed.every((o) => designed.includes(o));
+    lines.push(`| ${p.name} | ${p.pr} | ${observed.join(", ") || "∅"} | ${designed.join(", ") || "∅"} | ${match ? "YES" : "**NO**"} | ${staticRoutes.length} routes | ${det ? "YES" : "**NO**"} |`);
+  }
+  lines.push("", "Single-subject-per-language: an existence replication, not a language benchmark.", "");
+
+  // E7: ML replication — tolerance behavior on model updates + a compute-scenario PR.
+  lines.push("## E7 — ML replication (F-21/F-23/F-25)", "");
+  const pyLabels = JSON.parse(readFileSync(join(ROOT, "demo", "prs-py", "labels.json"), "utf8")) as {
+    prs: { id: string; patch: string; designed: { observed: string[] } }[];
+  };
+  {
+    const shopPy = join(ROOT, "demo", "shop-api-py");
+    const scenPy = join(ROOT, "demo", "scenarios-py");
+    const repo = mkdtempSync(join(tmpdir(), "rw-eval7-"));
+    cpSync(shopPy, repo, { recursive: true, filter: (s) => !s.includes(".git") && !s.includes(".venv") && !s.includes("__pycache__") });
+    const g = (args: string[]): Promise<string> => execa("git", args, { cwd: repo }).then((r) => r.stdout.trim()) as Promise<string>;
+    await g(["init", "-q", "-b", "main", "."]);
+    await g(["config", "user.email", "eval@local"]);
+    await g(["config", "user.name", "eval"]);
+    await g(["add", "-A"]);
+    await g(["commit", "-qm", "base"]);
+    const baseRef = await g(["rev-parse", "HEAD"]);
+    const heads: Record<string, string> = {};
+    for (const pr of ["PR-PY-01", "PR-PY-02"]) {
+      await g(["checkout", "-qb", pr]);
+      await execa("git", ["apply", join(ROOT, "demo", "prs-py", `${pr}.patch`)], { cwd: repo });
+      await g(["add", "-A"]);
+      await g(["commit", "-qm", pr]);
+      heads[pr] = await g(["rev-parse", "HEAD"]);
+      await g(["checkout", "-q", "main"]);
+    }
+    const pscen = loadScenarios(scenPy);
+    const pmap = new Map(pscen.map((s) => [s.id, s.routeIds]));
+    const tol = new Map(pscen.map((s) => [s.id, s.tolerances ?? []]));
+    lines.push("| PR | observed | designed | tolerated paths | match |");
+    lines.push("|---|---|---|---|---|");
+    for (const pr of ["PR-PY-01", "PR-PY-02"]) {
+      const designed = pyLabels.prs.find((x) => x.id === pr)?.designed.observed ?? [];
+      const rr = await runReplay({
+        repoPath: repo, baseRef, headRef: heads[pr] as string, scenariosDir: scenPy, seedDbRel: "seed/seed.db",
+        workRoot: mkdtempSync(join(tmpdir(), `rw-eval7r-${pr}-`)), language: "python", appStart: ["python3", "server.py"],
+      });
+      if (!rr.ok) {
+        lines.push(`| ${pr} | REPLAY FAILED | ${designed.join(", ")} | — | NO |`);
+        continue;
+      }
+      const sds = rr.base.steps.map((s, i) => diffSteps(s, rr.head.steps[i] as (typeof rr.head.steps)[number], { tolerances: tol.get(s.scenarioId) ?? [] }));
+      const rds = aggregateByRoute(sds, pmap);
+      const observed = rds.filter((x) => x.changed).map((x) => x.routeId).sort();
+      const tolerated = [...new Set(rds.flatMap((x) => x.tolerated.map((t) => `${x.routeId} ${t.path}`)))].sort();
+      const match = observed.length === designed.length && observed.every((o) => designed.includes(o));
+      lines.push(`| ${pr} | ${observed.join(", ") || "∅"} | ${designed.join(", ") || "∅"} | ${tolerated.join("; ") || "—"} | ${match ? "YES" : "**NO**"} |`);
+    }
+    const { createHash } = await import("node:crypto");
+    const modelHash = createHash("sha256").update(readFileSync(join(shopPy, "model.json"))).digest("hex").slice(0, 12);
+    lines.push("", `- Provenance helper binds model.json (sha256:${modelHash}…); receipt wiring covered by CT-RC-05.`);
+  }
+  // E7b: compute-scenario PR on an ML-library repo (FACTOR 2 -> 3).
+  {
+    const repo = mkdtempSync(join(tmpdir(), "rw-eval7c-"));
+    const g = (args: string[]): Promise<string> => execa("git", args, { cwd: repo }).then((r) => r.stdout.trim()) as Promise<string>;
+    await g(["init", "-q", "-b", "main", "."]);
+    await g(["config", "user.email", "eval@local"]);
+    await g(["config", "user.name", "eval"]);
+    const MLIB = "FACTOR = 2\n\n\ndef score(x):\n    return {'y': x * FACTOR}\n";
+    writeFileSync(join(repo, "mlib.py"), MLIB);
+    await g(["add", "-A"]);
+    await g(["commit", "-qm", "base"]);
+    const baseRef = await g(["rev-parse", "HEAD"]);
+    writeFileSync(join(repo, "mlib.py"), MLIB.replace("FACTOR = 2", "FACTOR = 3"));
+    await g(["add", "-A"]);
+    await g(["commit", "-qm", "head"]);
+    const headRef = await g(["rev-parse", "HEAD"]);
+    const scenDir = mkdtempSync(join(tmpdir(), "rw-eval7cs-"));
+    writeFileSync(join(scenDir, "c.json"), JSON.stringify({ id: "c", group: "ml", kind: "compute", target: "mlib:score", args: [4], routeIds: ["fn:mlib:score"] }));
+    const rr = await runReplay({ repoPath: repo, baseRef, headRef, scenariosDir: scenDir, seedDbRel: "seed/seed.db", language: "python", workRoot: mkdtempSync(join(tmpdir(), "rw-eval7cr-")) });
+    if (!rr.ok) {
+      lines.push(`- Compute PR: REPLAY FAILED (${rr.error.stage}).`);
+    } else {
+      const d = diffSteps(rr.base.steps[0] as (typeof rr.base.steps)[number], rr.head.steps[0] as (typeof rr.head.steps)[number]);
+      lines.push(`- Compute PR (FACTOR 2→3, x=4): observed=${d.changed ? "fn:mlib:score" : "∅"} (expected fn:mlib:score): **${d.changed ? "YES" : "NO"}**.`);
+    }
+  }
+  lines.push("", "CPU-only toy models: an existence proof for ML subjects, not an accuracy benchmark.", "");
   lines.push(`Harness wall time: ${((Date.now() - started) / 1000).toFixed(0)}s.`);
   writeFileSync(join(ROOT, "eval", "results.md"), lines.join("\n"));
   console.log(`wrote eval/results.md in ${((Date.now() - started) / 1000).toFixed(0)}s`);

@@ -2,4 +2,5 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'demo/shop-api'
+  - 'demo/shop-api-js'
   - 'eval'

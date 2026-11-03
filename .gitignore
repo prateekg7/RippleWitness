@@ -13,3 +13,12 @@ dist/
 .env.*
 !.env.example
 .ripplewitness/
+# Polyglot subjects (Epic J/K)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.pnpm-store/
+.DS_Store
+test-results/
+playwright-report/

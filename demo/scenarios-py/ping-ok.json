@@ -1,0 +1,6 @@
+{
+  "id": "ping-ok",
+  "group": "health",
+  "routeIds": ["route:GET /v1/ping"],
+  "steps": [{ "method": "GET", "path": "/v1/ping" }]
+}

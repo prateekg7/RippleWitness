@@ -6,8 +6,27 @@ execution, cross-examines the agent with evidence-anchored questions, and
 issues a tamper-evident review receipt.
 
 Built for the Meta Global AI Developer Hackathon (Indie track). Status: working
-v1 for the stated scope (local, single-user, TypeScript/Express/SQLite subject
-apps). Numbers below come only from `pnpm eval` — see [eval/results.md](eval/results.md).
+v1 for the stated scope (local, single-user; TypeScript/Express/SQLite,
+plain-JS Node, Python/Flask-pattern, and Go `net/http` subject apps, plus ML
+tolerance / compute-scenario / pytest-harvest support). Numbers below come
+only from `pnpm eval` — see [eval/results.md](eval/results.md).
+
+## The 60-second version
+
+The agent says *"only touches checkout."* RippleWitness doesn't grade the
+sentence — it replays the change and checks. On the hero PR, execution shows
+`/reports/sales` changed too, through an event-bus coupling the static map
+cannot see. The reviewer had to predict the blast radius *before* that
+reveal; the prediction is scored against execution, and the resulting
+receipt is bound to the exact diff.
+
+| Claim | Execution said | Evidence |
+|---|---|---|
+| "Only touches checkout" (PR-00) | **CONTRADICTED** — `/reports/sales` moved via the dormant `discount.applied` subscriber | [eval/results.md](eval/results.md) E1/E3 (verifiers 20/20) |
+| Static map = the impact set | Map alone: precision 0.40, recall 0.53 — useful, not ground truth | [eval/results.md](eval/results.md) E1 |
+| "Nothing else changes" is checkable | Replay matched designed behavior on 7/8 catalog PRs; the 8th is the documented PR-00 coupling | [eval/results.md](eval/results.md) E1 |
+| Works on code we didn't write | Real upstream fix in `typicode/json-server`: predicted exactly the 404 change; gate 1.00/1.00; ed25519 receipt `VALID` in CI mode | [docs/real-repo-run.md](docs/real-repo-run.md) |
+| UNVERIFIED is a to-do, not a dead end | Forge loop synthesized `GET /products`, flipped UNVERIFIED → CONFIRMED live | [docs/forge-live-run.md](docs/forge-live-run.md) |
 
 ## Quickstart
 
@@ -15,9 +34,12 @@ Prerequisites: Node 22+, git, and `corepack` (ships with Node).
 
 ```sh
 corepack pnpm i
-corepack pnpm demo:prepare     # seed the demo shop-api database
-corepack pnpm dev              # server :4400 + web :5173
+corepack pnpm demo             # hero subject + server :4400 + web :5173
 ```
+
+(`pnpm demo` prepares the PR-00 scratch repo and prints the exact New
+review fields; beats in [docs/DEMO.md](docs/DEMO.md). Prefer manual
+control? `corepack pnpm demo:prepare && corepack pnpm dev`.)
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173) in a browser, then review the
 hero PR: repo path `<checkout>/demo/shop-api` does not apply directly — the
@@ -32,6 +54,7 @@ explainer, summary) honestly report `NO-LLM` mode.
 corepack pnpm lint && corepack pnpm typecheck
 corepack pnpm test             # unit (fast, no network)
 corepack pnpm test:int         # integration (spawns servers; needs localhost)
+corepack pnpm test:e2e         # Playwright browser suite (E2E-01..08, E2E-11)
 corepack pnpm eval             # benchmark -> eval/results.md (~3 min)
 ```
 
@@ -44,22 +67,29 @@ corepack pnpm eval             # benchmark -> eval/results.md (~3 min)
    recall/precision are execution-graded, misses get a cause taxonomy.
 3. **Cross-Examination** — agent claims are extracted, verified
    deterministically, and challenged with evidence-anchored questions; answers
-   are re-verified (RESOLVED / CONTESTED / OPEN).
-4. **Review Receipt** — HMAC-signed record bound to the diff + scenario suite,
-   stored as a git note; `ripplewitness verify` and the pre-push hook enforce it.
+   are re-verified (RESOLVED / CONTESTED / OPEN). The question channel talks
+   to the agent through the `AgentSessionPort`; without a wired session the
+   ask reports "not verified" and questions stay OPEN (no fake answers).
+4. **Review Receipt** — HMAC-signed by default (ed25519 on request) record
+   bound to the diff + scenario suite, stored as a git note;
+   `ripplewitness verify` and the pre-push hook enforce it; the CI action
+   verifies both algorithms.
 
 P1 features: blind-first AI review, canary hunks (execution-validated
 mutations), hunk explainer, evidence-only summaries, strict-mode hook.
+Roadmap slices shipped: Go extractor, `GET /api/runs/:id/report` (PR-comment
+markdown), `ripplewitness import-har` (recorded traffic → scenarios),
+`externalGraph` review input for unsupported languages.
 
 ## Layout
 
-- `apps/server` — pipeline + REST API + CLI (`doctor|serve|verify|hook`)
+- `apps/server` — pipeline + REST API + CLI (`doctor|serve|verify|hook|draft-scenarios|import-har`)
 - `apps/web` — React cockpit (Vite)
 - `packages/{core,graph,replay,crossexam,agents,receipt,canary}` — pipeline stages
 - `demo/shop-api` — deterministic subject app (12 routes, event bus, seeded SQLite)
 - `demo/scenarios` — 42 replay fixtures; `demo/prs` — 8 hand-authored PR patches + labels
-- `eval/` — benchmark harness; `docs/` — spikes, demo script, submission notes
+- `eval/` — benchmark harness; `docs/` — spikes, live-run evidence, bug log, demo script, submission notes
 
-Spec docs: `PRD.md`, `TRD.md`, `ARCHITECTURE.md`, `TASKS.md`, `TESTS_AND_BUGS.md`,
-`AUDIT.md`, `AGENTS.md`. Cost rule: agent runs/prompts are reused from the
-session store, never regenerated; fixtures are hand-authored (AGENTS §A5b).
+Planning docs (`PRD.md`, `TRD.md`, …) live with the author, not in this repo.
+Cost rule: agent runs/prompts are reused from the session store, never
+regenerated; fixtures are hand-authored.

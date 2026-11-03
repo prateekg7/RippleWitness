@@ -6,6 +6,9 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
   const [baseRef, setBaseRef] = useState("main");
   const [headRef, setHeadRef] = useState("HEAD");
   const [scenariosDir, setScenariosDir] = useState("");
+  const [appDir, setAppDir] = useState("");
+  const [seedDbRel, setSeedDbRel] = useState("");
+  const [appStart, setAppStart] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -13,7 +16,16 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
     setBusy(true);
     setError("");
     try {
-      const r = await api.analyze({ repoPath, baseRef, headRef, scenariosDir });
+      const argv = appStart.trim();
+      const r = await api.analyze({
+        repoPath,
+        baseRef,
+        headRef,
+        scenariosDir,
+        ...(appDir.trim() ? { appDir: appDir.trim() } : {}),
+        ...(seedDbRel.trim() ? { seedDbRel: seedDbRel.trim() } : {}),
+        ...(argv ? { appStart: argv.split(/\s+/) } : {}),
+      });
       props.onCreated(r.runId);
     } catch (err) {
       setError(String(err));
@@ -39,6 +51,21 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
         Scenarios dir
         <input type="text" value={scenariosDir} onChange={(e) => setScenariosDir(e.target.value)} placeholder="/path/to/demo/scenarios" />
       </label>
+      <details>
+        <summary>Advanced (app dir, seed DB, start command)</summary>
+        <label>
+          App dir (default: repo root)
+          <input type="text" value={appDir} onChange={(e) => setAppDir(e.target.value)} placeholder="." />
+        </label>
+        <label>
+          Seed DB path, app-relative (default: seed/seed.db)
+          <input type="text" value={seedDbRel} onChange={(e) => setSeedDbRel(e.target.value)} placeholder="seed/seed.db" />
+        </label>
+        <label>
+          Start command, space-separated (default: package.json start)
+          <input type="text" value={appStart} onChange={(e) => setAppStart(e.target.value)} placeholder="node server.js" />
+        </label>
+      </details>
       {error && <p className="error">{error}</p>}
       <button onClick={() => void submit()} disabled={busy || !repoPath || !scenariosDir}>
         {busy ? "Starting…" : "Analyze"}

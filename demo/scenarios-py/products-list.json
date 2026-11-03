@@ -1,0 +1,9 @@
+{
+  "id": "products-list",
+  "group": "products",
+  "routeIds": ["route:GET /products", "route:GET /products/:sku"],
+  "steps": [
+    { "method": "GET", "path": "/products" },
+    { "method": "GET", "path": "/products/SKU-2" }
+  ]
+}

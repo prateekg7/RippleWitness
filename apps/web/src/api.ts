@@ -23,6 +23,7 @@ export interface Reveal {
   nodes: (MapNode & { status: string })[];
   claims: { claimId: string; type: string; text: string; verdict: string; routes: string[] }[];
   questions: Question[];
+  reviewMode: string;
 }
 
 export interface Question {
@@ -48,8 +49,8 @@ export const api = {
     fetch("/api/analyze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(
       j<{ runId: string }>,
     ),
-  status: (runId: string) => fetch(`/api/runs/${runId}/status`).then(j<{ status: string; stages: string; locked: number }[]> as never) as Promise<{ status: string; stages: string; locked: number }>,
-  map: (runId: string) => fetch(`/api/runs/${runId}/map`).then(j<{ nodes: MapNode[] }>),
+  status: (runId: string) => fetch(`/api/runs/${runId}/status`).then(j<{ status: string; stages: string; locked: number }[]> as never) as Promise<{ status: string; stages: string; locked: number; reviewMode: string }>,
+  map: (runId: string) => fetch(`/api/runs/${runId}/map`).then(j<{ nodes: MapNode[]; calibration?: string[] }>),
   predict: (runId: string, body: { routeIds: string[]; nothingElse: boolean }) =>
     fetch(`/api/runs/${runId}/predict`, {
       method: "POST",
@@ -100,5 +101,60 @@ export const api = {
   summary: (runId: string) =>
     fetch(`/api/runs/${runId}/summary`, { method: "POST" }).then(
       j<{ summary: { title: string; body: string; unverified: string[] } }>,
+    ),
+  fnrun: (runId: string, body: { fn: string; args?: unknown[]; predictedBase?: unknown; predictedHead?: unknown }) =>
+    fetch(`/api/runs/${runId}/fn-run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(
+      j<{
+        fn: string;
+        base: { ok: boolean; value: unknown };
+        head: { ok: boolean; value: unknown };
+        baseHit: boolean | null;
+        headHit: boolean | null;
+        changed: boolean | null;
+      }>,
+    ),
+  autoforge: (runId: string) =>
+    fetch(`/api/runs/${runId}/forge/auto`, { method: "POST" }).then(
+      j<{ queued: string[]; synthesized: number; kept: string[]; dropped: { id: string; reason: string }[] }>,
+    ),
+  diff: (runId: string) =>
+    fetch(`/api/runs/${runId}/diff`).then(
+      j<{
+        files: {
+          file: string;
+          truncated: boolean;
+          hunks: { header: string; lines: { type: string; text: string; oldNo: number | null; newNo: number | null }[] }[];
+        }[];
+      }>,
+    ),
+  ablations: (runId: string, routeId: string) =>
+    fetch(`/api/runs/${runId}/ablations?routeId=${encodeURIComponent(routeId)}`).then(
+      j<{ routeId: string; candidates: { kind: string; file: string; event?: string; reason: string }[] }>,
+    ),
+  ablate: (runId: string, body: { routeId: string; kind: string; file: string; event?: string }) =>
+    fetch(`/api/runs/${runId}/ablate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(j<{ verdict: string; detail: string; changedAfter: boolean | null }>),
+  metrics: (runId: string) =>
+    fetch(`/api/runs/${runId}/metrics`).then(
+      j<{
+        metrics: {
+          calls: number;
+          transportRetries: number;
+          schemaRepairs: number;
+          timeouts: number;
+          tokensIn: number;
+          tokensOut: number;
+          latencyMs: number;
+          cacheHits: number;
+          perAgent: Record<string, { calls: number; schemaValid: number; repairs: number }>;
+        };
+      }>,
     ),
 };

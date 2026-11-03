@@ -5,7 +5,13 @@ export type NodeStatus =
   | "UNVERIFIED"
   | "QUIET"
   | "DIFF"
-  | "CONTRADICTED";
+  | "CONTRADICTED"
+  | "CHANGED"
+  | "UNCHANGED"
+  | "UNCOVERED";
+
+/** Review mode: full fusion, replay-failed, or static-unknown (J-05). */
+export type ReviewMode = "full" | "static-only" | "dynamic-only";
 
 export type ClaimType = "SCOPE" | "BEHAVIOR_UNCHANGED" | "IMPLEMENTED" | "TESTS" | "API_COMPAT";
 export type ClaimVerdict = "SUPPORTED" | "CONTRADICTED" | "UNVERIFIABLE";
@@ -35,6 +41,8 @@ export interface FusedNode {
   observedChanged: boolean;
   staticImpacted: boolean;
   inDiff: boolean;
+  /** Route exists in the head graph but not the base graph. */
+  isNew?: boolean;
   surprise: boolean;
   contradictedBy: string[];
 }

@@ -5,7 +5,7 @@ import type { ClaimEvidence, FusedNode, NodeStatus, RouteEvidence } from "./type
  * SURPRISE > CONTRADICTED > CONFIRMED/CLEARED > UNVERIFIED > QUIET,
  * with DIFF for added/removed routes and CONTRADICTED from claim verdicts.
  */
-export function fuseRoutes(routes: RouteEvidence[], claims: ClaimEvidence[]): FusedNode[] {
+export function fuseRoutes(routes: RouteEvidence[], claims: ClaimEvidence[], opts: { staticUnknown?: boolean } = {}): FusedNode[] {
   const contradictedBy = new Map<string, string[]>();
   for (const c of claims) {
     if (c.verdict !== "CONTRADICTED") continue;
@@ -19,6 +19,16 @@ export function fuseRoutes(routes: RouteEvidence[], claims: ClaimEvidence[]): Fu
       let status: NodeStatus;
       if (r.isNew) {
         status = "DIFF";
+      } else if (opts.staticUnknown && contra.length > 0 && r.exercised) {
+        status = "CONTRADICTED";
+      } else if (opts.staticUnknown && r.exercised && r.observedChanged) {
+        // Dynamic-only (J-05): report observed outcomes without static claims.
+        // No SURPRISE — surprise asserts "no static path", which needs a static pass.
+        status = "CHANGED";
+      } else if (opts.staticUnknown && r.exercised) {
+        status = "UNCHANGED";
+      } else if (opts.staticUnknown) {
+        status = "UNCOVERED";
       } else if (r.exercised && r.observedChanged && !r.staticImpacted) {
         status = "SURPRISE";
       } else if (contra.length > 0 && r.exercised) {
@@ -39,6 +49,7 @@ export function fuseRoutes(routes: RouteEvidence[], claims: ClaimEvidence[]): Fu
         observedChanged: r.observedChanged,
         staticImpacted: r.staticImpacted,
         inDiff: r.inDiff,
+        isNew: r.isNew,
         surprise: status === "SURPRISE",
         contradictedBy: contra,
       };

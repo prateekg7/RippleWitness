@@ -1,0 +1,9 @@
+{
+  "id": "reports-after-cart",
+  "group": "reports",
+  "routeIds": ["route:POST /cart/add", "route:GET /reports/total"],
+  "steps": [
+    { "method": "POST", "path": "/cart/add", "body": { "sku": "SKU-2", "qty": 2 } },
+    { "method": "GET", "path": "/reports/total" }
+  ]
+}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MetaClient } from "./meta.js";
+import { DEFAULT_OUTPUT_TOKENS, type MetaCallContext, type MetaClient } from "./meta.js";
 
 export const ExplanationSchema = z.object({
   summary: z.string().min(1),
@@ -44,10 +44,10 @@ export function validateExplanation(out: Explanation, input: ExplainerInput): { 
   return { ok: true };
 }
 
-export async function runExplainer(client: MetaClient, input: ExplainerInput): Promise<Explanation> {
+export async function runExplainer(client: MetaClient, input: ExplainerInput, ctx: MetaCallContext = {}): Promise<Explanation> {
   const system = SYSTEM.replace("{maxSentences}", String(input.maxSentences ?? 5));
   const user = `<data>${JSON.stringify({ route: input.routeId, hunk: input.hunk.slice(0, HUNK_CHAR_LIMIT), neighbors: input.neighbors, observations: input.observations })}</data>`;
-  const out = await client.completeJson(system, user, ExplanationSchema);
+  const out = await client.completeJson(system, user, ExplanationSchema, DEFAULT_OUTPUT_TOKENS, { ...ctx, agent: "explainer" });
   const v = validateExplanation(out, input);
   if (!v.ok) throw new Error(`explanation failed traceability: ${v.reason}`);
   return out;

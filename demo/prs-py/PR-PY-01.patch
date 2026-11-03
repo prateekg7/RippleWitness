@@ -1,0 +1,8 @@
+diff --git a/model.json b/model.json
+index 762b07f..e0b8cb2 100644
+--- a/model.json
++++ b/model.json
+@@ -1 +1 @@
+-{"version": "v1", "coef": [0.5, 1.25, -0.75], "bias": 0.125}
++{"version": "v1", "coef": [0.500001, 1.25, -0.75], "bias": 0.125}
+\ No newline at end of file

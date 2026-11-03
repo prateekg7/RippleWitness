@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { keyPath, loadOrCreateKey } from "./key.js";
-import { readNote, signReceipt, trailerValue, verifyReceipt, writeNote } from "./index.js";
+import { keyPath, loadOrCreateKey, loadOrCreateSignKey } from "./key.js";
+import { readNote, signReceipt, signReceiptEd, trailerValue, verifyReceipt, verifyReceiptAny, verifyReceiptEd, writeNote } from "./index.js";
 import type { ReceiptPayload } from "./index.js";
 
 const execFileP = promisify(execFile);
@@ -67,5 +67,39 @@ describe("receipt (E-03)", () => {
     const k2 = loadOrCreateKey(home);
     expect(k1.equals(k2)).toBe(true);
     expect(keyPath(home)).toContain("key");
+  });
+  it("CT-RC-05: tier + artifact hashes roundtrip; legacy payloads still verify", () => {
+    const key = loadOrCreateKey(mkdtempSync(join(tmpdir(), "rw-key-")));
+    const tiered = signReceipt({ ...payload(), assuranceTier: "L3", artifactHashes: { "model.json": "sha256:abc" } }, key);
+    expect(verifyReceipt(tiered, key)).toEqual({ ok: true });
+    expect(tiered.payload.assuranceTier).toBe("L3");
+    const legacy = signReceipt(payload(), key);
+    expect(verifyReceipt(legacy, key)).toEqual({ ok: true });
+    expect(legacy.payload.assuranceTier).toBeUndefined();
+  });
+  it("CT-RC-06: ed25519 sign/verify roundtrip; tamper and wrong key fail", () => {
+    const keys = loadOrCreateSignKey(mkdtempSync(join(tmpdir(), "rw-sign-")));
+    const again = loadOrCreateSignKey(mkdtempSync(join(tmpdir(), "rw-sign-")));
+    const r = signReceiptEd(payload(), keys.privateKeyPem);
+    expect(r.alg).toBe("ed25519");
+    expect(verifyReceiptEd(r, keys.publicKeyPem)).toEqual({ ok: true });
+    expect(trailerValue(r)).toMatch(/^RippleWitness-Receipt: ed25519:[0-9a-f]{16}:[0-9a-f]{12}$/);
+    const tampered = { ...r, payload: { ...r.payload, headRef: "evil" } };
+    expect(verifyReceiptEd(tampered, keys.publicKeyPem)).toEqual({ ok: false, reason: "signature_mismatch" });
+    expect(verifyReceiptEd(r, again.publicKeyPem)).toEqual({ ok: false, reason: "signature_mismatch" });
+    expect(verifyReceiptEd({ nope: 1 }, keys.publicKeyPem)).toEqual({ ok: false, reason: "malformed_receipt" });
+  });
+  it("CT-RC-07: verifyReceiptAny dispatches on shape and names the missing credential", () => {
+    const hmacKey = loadOrCreateKey(mkdtempSync(join(tmpdir(), "rw-key-")));
+    const keys = loadOrCreateSignKey(mkdtempSync(join(tmpdir(), "rw-sign-")));
+    const h = signReceipt(payload(), hmacKey);
+    const e = signReceiptEd(payload(), keys.privateKeyPem);
+    expect(verifyReceiptAny(h, { hmacKey })).toEqual({ ok: true });
+    expect(verifyReceiptAny(e, { publicKeyPem: keys.publicKeyPem })).toEqual({ ok: true });
+    expect(verifyReceiptAny(e, { hmacKey })).toEqual({ ok: false, reason: "public_key_required" });
+    expect(verifyReceiptAny(h, { publicKeyPem: keys.publicKeyPem })).toEqual({ ok: false, reason: "hmac_key_required" });
+    // Cross-shape replay: an HMAC receipt never verifies as ed25519 and vice versa.
+    expect(verifyReceiptEd(h, keys.publicKeyPem)).toEqual({ ok: false, reason: "malformed_receipt" });
+    expect(verifyReceipt(e, hmacKey)).toEqual({ ok: false, reason: "malformed_receipt" });
   });
 });

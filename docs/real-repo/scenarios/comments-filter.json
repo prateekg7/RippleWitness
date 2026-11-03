@@ -1,0 +1,6 @@
+{
+  "id": "comments-filter",
+  "group": "api",
+  "routeIds": ["route:GET /comments"],
+  "steps": [{ "method": "GET", "path": "/comments?postId=1" }]
+}

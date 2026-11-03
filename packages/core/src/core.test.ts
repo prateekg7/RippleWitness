@@ -126,3 +126,31 @@ describe("gate scoring (C-05)", () => {
     expect(() => scoreGate(null, [], cfg)).toThrow();
   });
 });
+
+describe("fusion dynamic-only (J-05)", () => {
+  it("reports observed outcomes without static claims; no SURPRISE without a static pass", () => {
+    const out = fuseRoutes(
+      [
+        ev({ routeId: "route:POST /x", exercised: true, observedChanged: true }),
+        ev({ routeId: "route:GET /y", exercised: true, observedChanged: false }),
+        ev({ routeId: "route:GET /z", exercised: false }),
+      ],
+      [],
+      { staticUnknown: true },
+    );
+    const byId = Object.fromEntries(out.map((n) => [n.routeId, n.status]));
+    expect(byId).toEqual({
+      "route:POST /x": "CHANGED",
+      "route:GET /y": "UNCHANGED",
+      "route:GET /z": "UNCOVERED",
+    });
+    expect(out.every((n) => n.surprise === false)).toBe(true);
+  });
+  it("contradicted claims still surface in dynamic-only mode", () => {
+    const claims: ClaimEvidence[] = [{ claimId: "c1", type: "SCOPE", verdict: "CONTRADICTED", routes: ["route:POST /x"] }];
+    const out = fuseRoutes([ev({ routeId: "route:POST /x", exercised: true, observedChanged: false })], claims, {
+      staticUnknown: true,
+    });
+    expect(out[0]?.status).toBe("CONTRADICTED");
+  });
+});

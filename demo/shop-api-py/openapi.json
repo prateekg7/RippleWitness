@@ -1,0 +1,78 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "shop-api-py", "version": "0.1.0" },
+  "paths": {
+    "/health": { "get": { "responses": { "200": { "description": "ok" } } } },
+    "/products": { "get": { "responses": { "200": { "description": "list" } } } },
+    "/products/{sku}": {
+      "get": {
+        "parameters": [{ "name": "sku", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "one" } }
+      }
+    },
+    "/cart": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user": { "type": "string" },
+                  "items": { "type": "array", "items": { "type": "object" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "created" } }
+      }
+    },
+    "/cart/{id}": {
+      "get": {
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "one" } }
+      }
+    },
+    "/checkout": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "cartId": { "type": "string" }, "user": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "order" } }
+      }
+    },
+    "/orders": { "get": { "responses": { "200": { "description": "list" } } } },
+    "/orders/{id}": {
+      "get": {
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "one" } }
+      }
+    },
+    "/reports/sales": { "get": { "responses": { "200": { "description": "summary" } } } },
+    "/predict": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "features": { "type": "array", "items": { "type": "number" } } },
+                "required": ["features"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "prediction" } }
+      }
+    },
+    "/v1/ping": { "get": { "responses": { "200": { "description": "pong" } } } }
+  }
+}

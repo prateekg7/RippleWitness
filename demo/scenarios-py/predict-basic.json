@@ -1,0 +1,7 @@
+{
+  "id": "predict-basic",
+  "group": "ml",
+  "routeIds": ["route:POST /predict"],
+  "steps": [{ "method": "POST", "path": "/predict", "body": { "features": [1.0, 2.0, 3.0] } }],
+  "tolerances": [{ "path": "$.y" }]
+}

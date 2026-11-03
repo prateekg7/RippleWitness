@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeBody } from "./normalize.js";
-import { aggregateByRoute, diffSteps, resolveStepRoutes } from "./diff.js";
+import { aggregateByRoute, diffSteps, numbersClose, resolveStepRoutes } from "./diff.js";
 import { detectVolatile } from "./flake.js";
 import type { StepObservation } from "./types.js";
 
@@ -60,8 +60,8 @@ describe("differ", () => {
   it("aggregates step diffs per route", () => {
     const agg = aggregateByRoute(
       [
-        { scenarioId: "s1", stepIndex: 0, method: "GET", path: "/x", changed: true, kinds: ["body"], diffs: [] },
-        { scenarioId: "s2", stepIndex: 0, method: "GET", path: "/x", changed: false, kinds: [], diffs: [] },
+        { scenarioId: "s1", stepIndex: 0, method: "GET", path: "/x", changed: true, kinds: ["body"], diffs: [], tolerated: [] },
+        { scenarioId: "s2", stepIndex: 0, method: "GET", path: "/x", changed: false, kinds: [], diffs: [], tolerated: [] },
       ],
       new Map([["s1", ["route:A"]], ["s2", ["route:A", "route:B"]]]),
     );
@@ -75,8 +75,8 @@ describe("differ", () => {
     const declared = ["route:POST /cart", "route:POST /checkout"];
     const agg = aggregateByRoute(
       [
-        { scenarioId: "s1", stepIndex: 0, method: "POST", path: "/cart", changed: false, kinds: [], diffs: [] },
-        { scenarioId: "s1", stepIndex: 1, method: "POST", path: "/checkout", changed: true, kinds: ["body"], diffs: [] },
+        { scenarioId: "s1", stepIndex: 0, method: "POST", path: "/cart", changed: false, kinds: [], diffs: [], tolerated: [] },
+        { scenarioId: "s1", stepIndex: 1, method: "POST", path: "/checkout", changed: true, kinds: ["body"], diffs: [], tolerated: [] },
       ],
       new Map([["s1", declared]]),
     );
@@ -118,5 +118,124 @@ describe("flake guard", () => {
       { mask: ["$..createdAt"] },
     );
     expect(r.volatileSteps).toEqual([]);
+  });
+  it("a missing twin step excludes its routes too", () => {
+    const r = detectVolatile([step()], [], new Map([["s1", ["route:A"]]]));
+    expect(r.volatileSteps).toEqual(["s1:0"]);
+    expect(r.volatileRoutes).toEqual(["route:A"]);
+  });
+});
+
+describe("step route attribution", () => {
+  it("literal segments match exactly (regex metacharacters escaped)", () => {
+    const declared = ["route:GET /v1.2/ping", "route:GET /v1x2/ping"];
+    expect(resolveStepRoutes("GET", "/v1.2/ping", declared)).toEqual(["route:GET /v1.2/ping"]);
+    expect(resolveStepRoutes("GET", "/v1x2/ping", declared)).toEqual(["route:GET /v1x2/ping"]);
+    expect(resolveStepRoutes("GET", "/items/42", ["route:GET /items/:id"])).toEqual(["route:GET /items/:id"]);
+    expect(resolveStepRoutes("GET", "/items/42/x", ["route:GET /items/:id"])).toEqual(["route:GET /items/:id"]);
+  });
+});
+
+describe("process registry teardown", () => {
+  it("captures the stderr tail of failed children", async () => {
+    const { ProcRegistry } = await import("./proc.js");
+    const procs = new ProcRegistry();
+    const child = procs.spawn("node", ["-e", "console.error('boot kaboom'); process.exit(3)"], process.cwd(), {
+      PATH: process.env.PATH as string,
+    }, { captureStderr: true });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(child.exitCode).toBe(3);
+    expect(procs.stderrTail(child)).toContain("boot kaboom");
+    const quiet = procs.spawn("node", ["-e", "process.exit(0)"], process.cwd(), { PATH: process.env.PATH as string });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(procs.stderrTail(quiet)).toBe("");
+    await procs.killAll();
+  });
+
+  it("escalates to SIGKILL for children that trap SIGTERM", async () => {
+    const { ProcRegistry } = await import("./proc.js");
+    const procs = new ProcRegistry();
+    const child = procs.spawn("node", ["-e", "process.on('SIGTERM', () => {}); setTimeout(() => {}, 30000)"], process.cwd(), {
+      PATH: process.env.PATH as string,
+    });
+    expect(child.pid).toBeDefined();
+    await procs.killAll();
+    expect(procs.size).toBe(0);
+    expect(() => process.kill(child.pid as number, 0)).toThrow();
+  });
+});
+
+describe("tolerance differ (F-21)", () => {
+  const TOL = [{ path: "$.score" }, { path: "$.vec" }];
+
+  it("CT-NUM-01: deviation exactly at the boundary counts as within tolerance", () => {
+    // |1.0 - 1.125| = 0.125 exactly (powers of two) <= atol(0.125) + rtol(0)*|b|
+    expect(numbersClose(1.0, 1.125, { atol: 0.125, rtol: 0 }).close).toBe(true);
+    expect(numbersClose(1.0, 1.125, { atol: 0.125, rtol: 0 }).deviation).toBe(0.125);
+    expect(numbersClose(1.0, 1.1250001, { atol: 0.125, rtol: 0 }).close).toBe(false);
+    const d = diffSteps(step({ body: { score: 1.0 } }), step({ body: { score: 1.0 + 1e-9 } }), { tolerances: TOL });
+    expect(d.changed).toBe(false);
+    expect(d.tolerated).toHaveLength(1);
+    expect(d.tolerated[0]).toMatchObject({ path: "$.score", before: 1.0, after: 1.0 + 1e-9 });
+  });
+
+  it("above-tolerance numerics still change, with deviation recorded", () => {
+    const d = diffSteps(step({ body: { score: 1.0 } }), step({ body: { score: 2.0 } }), { tolerances: TOL });
+    expect(d.changed).toBe(true);
+    expect(d.diffs.map((x) => x.path)).toContain("$.score");
+    expect(d.tolerated).toHaveLength(0);
+  });
+
+  it("CT-NUM-02: tensor shape change is a real diff even with equal values", () => {
+    const d = diffSteps(step({ body: { vec: [1, 2] } }), step({ body: { vec: [1, 2, 3] } }), { tolerances: TOL });
+    expect(d.changed).toBe(true);
+    const same = diffSteps(step({ body: { vec: [1.0, 2.0] } }), step({ body: { vec: [1.0, 2.0 + 1e-9] } }), { tolerances: TOL });
+    expect(same.changed).toBe(false);
+    expect(same.tolerated.map((t) => t.path)).toEqual(["$.vec[1]"]);
+  });
+
+  it("CT-NUM-03: NaN equality requires explicit nanEqual", () => {
+    expect(numbersClose(Number.NaN, Number.NaN, {}).close).toBe(false);
+    expect(numbersClose(Number.NaN, Number.NaN, { nanEqual: true }).close).toBe(true);
+  });
+
+  it("CT-NUM-04: non-numeric leaves under a tolerance path stay byte-equal", () => {
+    const d = diffSteps(step({ body: { score: "high" } }), step({ body: { score: "low" } }), { tolerances: TOL });
+    expect(d.changed).toBe(true);
+    const typeChange = diffSteps(step({ body: { score: 1 } }), step({ body: { score: "1" } }), { tolerances: TOL });
+    expect(typeChange.changed).toBe(true);
+  });
+
+  it("unconfigured paths are unaffected by tolerance specs", () => {
+    const d = diffSteps(step({ body: { other: 1.0 } }), step({ body: { other: 1.0 + 1e-9 } }), { tolerances: TOL });
+    expect(d.changed).toBe(true);
+  });
+});
+
+describe("auto-mask learning (F-22)", () => {
+  it("learns $..key masks for wobbling body leaves only", async () => {
+    const { learnMasks } = await import("./flake.js");
+    expect(
+      learnMasks(
+        [step({ body: { createdAt: "t1", v: 1 } })],
+        [step({ body: { createdAt: "t2", v: 1 } })],
+      ),
+    ).toEqual(["$..createdAt"]);
+    expect(learnMasks([step({ body: { v: 1 } })], [step({ body: { v: 1 } })])).toEqual([]);
+  });
+  it("status and header flaps are not maskable", async () => {
+    const { learnMasks } = await import("./flake.js");
+    expect(
+      learnMasks(
+        [step({ status: 200, headers: { "content-type": "a" } })],
+        [step({ status: 500, headers: { "content-type": "b" } })],
+      ),
+    ).toEqual([]);
+  });
+  it("array element paths reduce to the array key", async () => {
+    const { learnMasks } = await import("./flake.js");
+    expect(
+      learnMasks([step({ body: { v: [1] } })], [step({ body: { v: [2] } })]),
+    ).toEqual(["$..v"]);
   });
 });
