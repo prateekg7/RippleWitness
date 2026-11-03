@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { ProcRegistry, discoverStartCommand, ensureDeps, pickFreePort } from "@ripplewitness/replay";
+import { ProcRegistry, discoverStartCommand, ensureDeps, pickFreePort, pnpmLauncher } from "@ripplewitness/replay";
 import type { FusedNode } from "@ripplewitness/core";
 import type { AdoptCandidate } from "./adopt.js";
 
@@ -167,7 +167,7 @@ export async function fetchOpenApiDoc(
     const appStart =
       boot.appStart ??
       (boot.language === "node" ? discoverStartCommand(boot.worktreeAppDir) : null) ??
-      (boot.language === "python" ? null : ["corepack", "pnpm", "start"]);
+      (boot.language === "python" ? null : [...pnpmLauncher(), "start"]);
     if (!appStart) return { ok: false, error: "python subjects require an explicit appStart command" };
     const port = await pickFreePort();
     const dir = mkdtempSync(join(tmpdir(), "rw-forge-"));
@@ -183,11 +183,14 @@ export async function fetchOpenApiDoc(
       FROZEN_TIME: "2026-01-01T00:00:00Z",
       EXTERNAL_MODE: "mock",
       OUTBOUND_LOG: join(dir, "out.log"),
-    });
+    }, { captureStderr: true });
     try {
       const deadline = Date.now() + (boot.timeoutMs ?? 15000);
       for (;;) {
-        if (child.exitCode !== null) return { ok: false, error: "app exited before serving /openapi.json" };
+        if (child.exitCode !== null) {
+          const tail = procs.stderrTail(child).trim().replace(/\s+/g, " ").slice(-500);
+          return { ok: false, error: `app exited before serving /openapi.json${tail ? ` — app stderr: ${tail}` : ""}` };
+        }
         try {
           const h = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2000) });
           if (h.ok) break;

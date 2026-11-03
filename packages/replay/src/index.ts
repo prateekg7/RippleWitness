@@ -13,7 +13,7 @@ export type { FlakeResult } from "./flake.js";
 export { detectVolatile, learnMasks } from "./flake.js";
 export { normalizeBody, maskKeys } from "./normalize.js";
 export { createWorktree, removeWorktree, revParse } from "./git.js";
-export { discoverGoStartCommand, discoverStartCommand, ensureDeps, hashManifests } from "./deps.js";
+export { discoverGoStartCommand, discoverStartCommand, ensureDeps, hashManifests, pnpmLauncher } from "./deps.js";
 export type { DepStrategy } from "./deps.js";
 export { isPortFree, pickFreePort, resolvePort } from "./ports.js";
 export type { SandboxReport } from "./sandbox.js";

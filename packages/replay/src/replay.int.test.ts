@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { buildSubjectRepo, cleanup, subsetScenariosDir } from "./testkit.js";
 import { diffSteps } from "./diff.js";
 import { createWorktree, removeWorktree } from "./git.js";
-import { ensureDeps, hashManifests } from "./deps.js";
+import { ensureDeps, hashManifests, pnpmLauncher } from "./deps.js";
 import { isPortFree } from "./ports.js";
 import { ProcRegistry } from "./proc.js";
 import { runReplay } from "./runner.js";
@@ -27,7 +27,7 @@ const SCENGO = join(ROOT, "demo", "scenarios-go");
 const PRSGO = join(ROOT, "demo", "prs-go");
 const PY_START = ["python3", "server.py"];
 
-const APP_START = ["corepack", "pnpm", "start"];
+const APP_START = [...pnpmLauncher(), "start"];
 const tmpRoots: string[] = [];
 afterAll(() => {
   for (const p of tmpRoots) cleanup(p);

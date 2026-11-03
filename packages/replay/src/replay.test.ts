@@ -137,6 +137,21 @@ describe("step route attribution", () => {
 });
 
 describe("process registry teardown", () => {
+  it("captures the stderr tail of failed children", async () => {
+    const { ProcRegistry } = await import("./proc.js");
+    const procs = new ProcRegistry();
+    const child = procs.spawn("node", ["-e", "console.error('boot kaboom'); process.exit(3)"], process.cwd(), {
+      PATH: process.env.PATH as string,
+    }, { captureStderr: true });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(child.exitCode).toBe(3);
+    expect(procs.stderrTail(child)).toContain("boot kaboom");
+    const quiet = procs.spawn("node", ["-e", "process.exit(0)"], process.cwd(), { PATH: process.env.PATH as string });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(procs.stderrTail(quiet)).toBe("");
+    await procs.killAll();
+  });
+
   it("escalates to SIGKILL for children that trap SIGTERM", async () => {
     const { ProcRegistry } = await import("./proc.js");
     const procs = new ProcRegistry();

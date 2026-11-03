@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { z } from "zod";
 import { createWorktree, removeWorktree } from "./git.js";
-import { discoverGoStartCommand, discoverStartCommand, ensureDeps, hashManifests } from "./deps.js";
+import { discoverGoStartCommand, discoverStartCommand, ensureDeps, hashManifests, pnpmLauncher } from "./deps.js";
 import { isPortFree, resolvePort } from "./ports.js";
 import { ProcRegistry } from "./proc.js";
 import { hashDb } from "./dbhash.js";
@@ -213,9 +213,15 @@ export async function runSide(
         OUTBOUND_LOG: outboundLog,
         ...interposed,
         ...scrubEnv(opts.env ?? {}),
-      });
+      }, { captureStderr: true });
       try {
-        await waitHealth(port, opts.healthTimeoutMs, () => child.exitCode !== null);
+        try {
+          await waitHealth(port, opts.healthTimeoutMs, () => child.exitCode !== null);
+        } catch (err) {
+          // Boot failures must be diagnosable (CI proved they otherwise are not).
+          const tail = procs.stderrTail(child).trim().replace(/\s+/g, " ").slice(-500);
+          throw new Error(`${(err as Error).message}${tail ? ` — app stderr: ${tail}` : ""}`);
+        }
         if (!routesCaptured) {
           routesCaptured = true;
           // Best-effort route inventory for dynamic-only reviews (J-05).
@@ -368,7 +374,7 @@ export async function runReplay(opts: ReplayOptions): Promise<ReplayResult> {
     opts.appStart ??
     (language === "node" ? discoverStartCommand(join(opts.repoPath, appDir)) : null) ??
     (language === "go" ? discoverGoStartCommand(join(opts.repoPath, appDir)) : null) ??
-    (language === "node" ? ["corepack", "pnpm", "start"] : null);
+    (language === "node" ? [...pnpmLauncher(), "start"] : null);
   if (!appStart && httpScenarios.length > 0) {
     return { ok: false, error: { stage: "config", message: `${language} subjects require an explicit appStart command` } };
   }

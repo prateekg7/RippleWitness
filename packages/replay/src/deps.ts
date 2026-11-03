@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { execa } from "execa";
@@ -19,10 +20,26 @@ function manifestHash(dir: string): string {
  * declares `scripts.start`, replay uses the package manager start; otherwise
  * null (caller falls back to its default). Never throws.
  */
+/**
+ * How to invoke pnpm for subject lifecycle (boot + frozen install).
+ * Prefers a `pnpm` already on PATH (CI via pnpm/action-setup disables
+ * corepack, so bare `corepack pnpm` fails there); falls back to corepack
+ * on machines where pnpm is only available through it. Never throws.
+ */
+export function pnpmLauncher(): string[] {
+  try {
+    const r = spawnSync("pnpm", ["--version"], { stdio: "ignore", timeout: 10000 });
+    if (r.status === 0) return ["pnpm"];
+  } catch {
+    /* fall through */
+  }
+  return ["corepack", "pnpm"];
+}
+
 export function discoverStartCommand(appDir: string): string[] | null {
   try {
     const pkg = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")) as { scripts?: { start?: unknown } };
-    return typeof pkg.scripts?.start === "string" && pkg.scripts.start.length > 0 ? ["corepack", "pnpm", "start"] : null;
+    return typeof pkg.scripts?.start === "string" && pkg.scripts.start.length > 0 ? [...pnpmLauncher(), "start"] : null;
   } catch {
     return null;
   }
@@ -61,7 +78,8 @@ export async function ensureDeps(
     symlinkSync(join(sourceDir, "node_modules"), link, "dir");
     return { strategy: "symlink", elapsedMs: Date.now() - started };
   }
-  await execa("corepack", ["pnpm", "install", "--frozen-lockfile"], {
+  const launcher = pnpmLauncher();
+  await execa(launcher[0] as string, [...launcher.slice(1), "install", "--frozen-lockfile"], {
     cwd: worktreeDir,
     timeout: 120000,
   });

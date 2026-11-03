@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { discoverGoStartCommand, ensureDeps, hashManifests } from "./deps.js";
+import { discoverGoStartCommand, ensureDeps, hashManifests, pnpmLauncher } from "./deps.js";
 
 describe("go dependency lifecycle (M-07)", () => {
   it("discovers `go run` from go.mod, null without it", () => {
@@ -34,6 +34,11 @@ describe("go dependency lifecycle (M-07)", () => {
     const r = await ensureDeps(src, wt, "same", "same");
     expect(r.strategy).toBe("symlink");
     expect(readFileSync(join(wt, "node_modules", "pkg", "index.js"), "utf8")).toBe("x");
+  });
+
+  it("pnpmLauncher prefers pnpm on PATH, else corepack", () => {
+    expect(pnpmLauncher().length).toBeGreaterThanOrEqual(1);
+    expect(pnpmLauncher()[pnpmLauncher().length - 1]).toBe("pnpm");
   });
 
   it("ensureDeps skips when the Go toolchain is preinstalled", async () => {
