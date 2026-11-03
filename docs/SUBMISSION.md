@@ -16,4 +16,4 @@ against the portal clock.
       agent runs reused from the session store per AGENTS §A5b).
 - [ ] `META_API_KEY` and `.ripplewitness/key` never committed (`.gitignore`);
       `.env.example` has names only.
-- [ ] Fresh-clone check: `pnpm i && pnpm lint && pnpm typecheck && pnpm test`.
+- [ ] Fresh-clone check: `corepack pnpm i && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test`.

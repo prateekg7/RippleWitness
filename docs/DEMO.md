@@ -4,8 +4,10 @@ Setup (once):
 
 ```sh
 corepack pnpm i && corepack pnpm demo:prepare
-rm -rf /tmp/demo-subj && cp -r demo/shop-api /tmp/demo-subj && cd /tmp/demo-subj
-git init -qb main && git add -A && git commit -qm base
+rm -rf /tmp/demo-subj && cp -r demo/shop-api /tmp/demo-subj && rm -rf /tmp/demo-subj/node_modules && cd /tmp/demo-subj
+git init -qb main && git config user.email demo@local && git config user.name demo
+printf 'node_modules\n' > .gitignore
+git add -A && git commit -qm base
 git checkout -qb pr-00 && git apply <checkout>/demo/prs/PR-00.patch && git add -A && git commit -qm pr-00
 ln -s <checkout>/demo/shop-api/node_modules node_modules
 corepack pnpm dev   # in the RippleWitness checkout (server :4400, web :5173)

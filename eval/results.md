@@ -1,6 +1,6 @@
 # RippleWitness eval results
 
-Generated: 2026-11-02T19:56:32.042Z by `pnpm eval` (eval/run.ts). Tree: uncommitted working tree.
+Generated: 2026-11-03T14:42:12.205Z by `pnpm eval` (eval/run.ts). Tree: uncommitted working tree.
 Scenarios: 42. No LLM calls in this harness (deterministic path only).
 
 ## E1 — differential replay vs designed labels
@@ -55,4 +55,25 @@ Accuracy: 20/20. False CONTRADICTED: 0 (target ≤10%, i.e. ≤2).
 - flip_cmp @src/app.ts:28 → ACCEPTED (observable change on 5 route(s); routes: route:GET /orders, route:GET /orders/:id, route:GET /reports/sales, route:GET /shipping/quote, route:POST /checkout)
 - Catch rate needs human trials; not measured here.
 
-Harness wall time: 171s.
+## E6 — polyglot replication (F-18/F-20)
+
+| subject | PR | observed | designed | match | static routes | deterministic |
+|---|---|---|---|---|---|---|
+| js | PR-JS-00 | route:GET /orders, route:GET /reports/sales, route:POST /checkout | route:POST /checkout, route:GET /orders, route:GET /reports/sales | YES | 13 routes | YES |
+| py | PR-PY-00 | route:GET /reports/sales, route:POST /checkout | route:POST /checkout, route:GET /reports/sales | YES | 13 routes | YES |
+
+Single-subject-per-language: an existence replication, not a language benchmark.
+
+## E7 — ML replication (F-21/F-23/F-25)
+
+| PR | observed | designed | tolerated paths | match |
+|---|---|---|---|---|
+| PR-PY-01 | ∅ | ∅ | route:POST /predict $.y | YES |
+| PR-PY-02 | route:POST /predict | route:POST /predict | — | YES |
+
+- Provenance helper binds model.json (sha256:fc0cc02a4c17…); receipt wiring covered by CT-RC-05.
+- Compute PR (FACTOR 2→3, x=4): observed=fn:mlib:score (expected fn:mlib:score): **YES**.
+
+CPU-only toy models: an existence proof for ML subjects, not an accuracy benchmark.
+
+Harness wall time: 250s.

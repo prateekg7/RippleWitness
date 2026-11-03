@@ -1,0 +1,6 @@
+{
+  "id": "post-one",
+  "group": "api",
+  "routeIds": ["route:GET /posts/:id"],
+  "steps": [{ "method": "GET", "path": "/posts/1" }]
+}
