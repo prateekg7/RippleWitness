@@ -1,0 +1,8 @@
+{
+  "name": "shop-mini-js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js"
+  }
+}

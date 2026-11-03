@@ -9,6 +9,7 @@ export type {
   Miss,
   MissCause,
   NodeStatus,
+  ReviewMode,
   RouteEvidence,
 } from "./types.js";
 export { fuseRoutes } from "./fuse.js";

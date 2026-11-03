@@ -1,8 +1,10 @@
-import { relative, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { Node, Project, SyntaxKind } from "ts-morph";
 import type { CallExpression, SourceFile } from "ts-morph";
 import { z } from "zod";
 import type { EdgeConfidence, GraphEdge, GraphNode, StaticGraph } from "./types.js";
+import type { SubjectLanguage } from "./language.js";
 
 const ROUTE_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 const MAX_CALL_DEPTH = 3;
@@ -63,18 +65,34 @@ function resolveFunction(projectFiles: SourceFile[], container: SourceFile, name
   return found[0] as FnInfo;
 }
 
-export function extractStaticGraph(rootDirInput: string): StaticGraph {
+export interface ExtractOptions {
+  /** Explicit language; wins over detection (TRD §7.2). Python is handled by the J-03 extractor. */
+  language?: SubjectLanguage;
+}
+
+/** Shared file filter: in-root, no deps/build output, no test files. */
+function keepFile(rootDir: string, filePath: string): boolean {
+  return (
+    filePath.startsWith(rootDir) &&
+    !filePath.includes("node_modules") &&
+    !filePath.includes("/dist/") &&
+    !filePath.endsWith(".test.ts") &&
+    !filePath.endsWith(".test.js")
+  );
+}
+
+export function extractStaticGraph(rootDirInput: string, opts: ExtractOptions = {}): StaticGraph {
   const rootDir = RootDirSchema.parse(rootDirInput);
-  const project = new Project({ tsConfigFilePath: `${rootDir}/tsconfig.json` });
-  const allFiles = project.getSourceFiles().filter((f) => {
-    const p = f.getFilePath();
-    return (
-      p.startsWith(rootDir) &&
-      !p.includes("node_modules") &&
-      !p.includes("/dist/") &&
-      !p.endsWith(".test.ts")
-    );
-  });
+  if (opts.language === "python") throw new Error("python extraction is handled by the Python extractor (J-03), not ts-morph");
+  let project: Project;
+  if (existsSync(join(rootDir, "tsconfig.json"))) {
+    project = new Project({ tsConfigFilePath: `${rootDir}/tsconfig.json` });
+  } else {
+    // Plain-JS subject (F-18): no tsconfig — load sources directly with allowJs.
+    project = new Project({ compilerOptions: { allowJs: true, checkJs: false } });
+    project.addSourceFilesAtPaths([`${rootDir}/**/*.js`, `${rootDir}/**/*.jsx`]);
+  }
+  const allFiles = project.getSourceFiles().filter((f) => keepFile(rootDir, f.getFilePath()));
   const relOf = (f: SourceFile): string => toPosix(relative(rootDir, f.getFilePath()));
 
   const nodes = new Map<string, GraphNode>();

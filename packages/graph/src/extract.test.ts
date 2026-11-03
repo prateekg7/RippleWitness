@@ -117,3 +117,29 @@ describe("static graph extractor (C-01)", () => {
     expect(a).toBe(b);
   });
 });
+
+describe("JS extractor (F-18, allowJs, no tsconfig)", () => {
+  const MINI_JS = join(HERE, "fixtures", "shop-mini-js");
+
+  it("IT-GR-JS-01: discovers routes with prefixes on the CJS fixture", () => {
+    const g = extractStaticGraph(MINI_JS);
+    const routes = g.nodes.filter((n) => n.kind === "route").map((n) => n.id);
+    expect(routes).toContain("route:GET /api/items");
+    expect(routes).toContain("route:GET /health");
+  });
+
+  it("IT-GR-JS-02: CommonJS call edges stop at depth 3", () => {
+    const g = extractStaticGraph(MINI_JS);
+    const calls = g.edges.filter((e) => e.type === "calls").map((e) => `${e.from} -> ${e.to}`);
+    expect(calls.some((c) => c.includes("service.js:deeper"))).toBe(true);
+    expect(calls.some((c) => c.includes(":deeper") && c.includes("level4"))).toBe(false);
+  });
+
+  it("IT-GR-JS-03: deterministic bytes; .test.js files excluded", () => {
+    const a = JSON.stringify(extractStaticGraph(MINI_JS));
+    const b = JSON.stringify(extractStaticGraph(MINI_JS));
+    expect(a).toBe(b);
+    expect(a).not.toContain("stray.test.js");
+    expect(a).not.toContain("/phantom");
+  });
+});
