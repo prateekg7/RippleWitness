@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MetaClient } from "./meta.js";
+import { DEFAULT_OUTPUT_TOKENS, type MetaCallContext, type MetaClient } from "./meta.js";
 
 export const SummarySchema = z.object({
   title: z.string().min(1).max(72),
@@ -17,6 +17,8 @@ export interface SummaryInput {
   observations: { routeId: string; changed: boolean }[];
   exercised: string[];
   unexercisedImpacted: string[];
+  /** Style hint (F-14), e.g. "conventional commits". Empty = no hint. */
+  style?: string;
 }
 
 /** Validator: impact ⊆ exercised, unverified ⊇ all unexercised-impacted. Pure. */
@@ -38,9 +40,10 @@ export function validateSummary(out: PrSummary, input: SummaryInput): { ok: true
  */
 export const SUMMARY_DIFF_CHAR_LIMIT = 8000;
 
-export async function runSummary(client: MetaClient, input: SummaryInput): Promise<PrSummary> {
+export async function runSummary(client: MetaClient, input: SummaryInput, ctx: MetaCallContext = {}): Promise<PrSummary> {
   const user = `<data>${JSON.stringify({ diff: input.diff.slice(0, SUMMARY_DIFF_CHAR_LIMIT), observations: input.observations })}</data>`;
-  const out = await client.completeJson(SYSTEM, user, SummarySchema);
+  const system = input.style ? `${SYSTEM}\nWrite in style: ${input.style.slice(0, 80)}.` : SYSTEM;
+  const out = await client.completeJson(system, user, SummarySchema, DEFAULT_OUTPUT_TOKENS, { ...ctx, agent: "summaryWriter" });
   const v = validateSummary(out, input);
   if (!v.ok) throw new Error(`summary failed validation: ${v.reason}`);
   return out;

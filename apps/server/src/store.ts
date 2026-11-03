@@ -37,6 +37,12 @@ export function openStore(dbPath?: string): Database.Database {
       routeId TEXT, claimId TEXT, status TEXT NOT NULL DEFAULT 'OPEN',
       askedCount INTEGER NOT NULL DEFAULT 0, answer TEXT, need REAL NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS calibration (
+      reviewerHash TEXT NOT NULL, runId TEXT NOT NULL, ts TEXT NOT NULL,
+      recall REAL NOT NULL, precision REAL NOT NULL, misses TEXT NOT NULL,
+      surpriseMissed INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (reviewerHash, runId)
+    );
   `);
   return db;
 }

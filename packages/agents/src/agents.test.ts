@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+
+// Unit tests must never touch a real response cache.
+process.env.RIPPLEWITNESS_NO_CACHE = "1";
 import { z } from "zod";
 import { extractClaims } from "./claims.js";
 import { MetaClient, MetaDegraded, USER_CONTENT_CHAR_LIMIT } from "./meta.js";

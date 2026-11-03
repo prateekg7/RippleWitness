@@ -11,6 +11,8 @@
     "dev": "echo '@ripplewitness/agents: dev lands with its owning task'"
   },
   "dependencies": {
+    "@ripplewitness/canary": "workspace:^",
+    "@ripplewitness/crossexam": "workspace:^",
     "zod": "3.23.8"
   }
 }

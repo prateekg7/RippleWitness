@@ -32,6 +32,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const SHOP = join(ROOT, "demo", "shop-api");
 const SCEN = join(ROOT, "demo", "scenarios");
 const PRS = join(ROOT, "demo", "prs");
+const SHOPPY = join(ROOT, "demo", "shop-api-py");
+const SCENPY = join(ROOT, "demo", "scenarios-py");
 
 async function buildRepo(patch: string | null): Promise<{ repoPath: string; base: string; head: string }> {
   const repoPath = mkdtempSync(join(tmpdir(), "rw-srv-"));
@@ -116,6 +118,35 @@ describe("server API (C-06)", () => {
     db.close();
   });
 
+  it("new routes are fused DIFF via the base-graph comparison (PR-03)", async () => {
+    const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}.db`));
+    const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wt-")), home: mkdtempSync(join(tmpdir(), "rw-srv-home-")) });
+    const { repoPath, base, head } = await buildRepo("PR-03.patch");
+    const started = await request(app)
+      .post("/api/analyze")
+      .send({ repoPath, baseRef: base, headRef: head, scenariosDir: subset(["discounts"]), flakeGuard: false });
+    expect(started.status).toBe(202);
+    const runId = (started.body as { runId: string }).runId;
+    let status = "";
+    for (let i = 0; i < 120; i++) {
+      const r = await request(app).get(`/api/runs/${runId}/status`);
+      status = (r.body as { status: string }).status;
+      if (status === "ready" || status === "static-only" || status === "failed") break;
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+    expect(status).toBe("ready");
+    await request(app).post(`/api/runs/${runId}/predict`).send({ routeIds: [], nothingElse: false });
+    const reveal = await request(app).get(`/api/runs/${runId}/reveal`);
+    const nodes = (reveal.body as { nodes: { routeId: string; status: string; isNew?: boolean; inDiff: boolean }[] }).nodes;
+    const added = nodes.find((n) => n.routeId === "route:POST /discounts/validate");
+    expect(added?.status).toBe("DIFF");
+    expect(added?.isNew).toBe(true);
+    // Pre-existing routes keep their identity and real in-diff flags.
+    const checkout = nodes.find((n) => n.routeId === "route:POST /checkout");
+    expect(checkout?.isNew).toBe(false);
+    db.close();
+  });
+
   it("cross-exam: agent message -> contradiction -> ask -> resolved; empty answers follow up then park", async () => {
     const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-c.db`));
     const app = createServer(db, {
@@ -178,6 +209,9 @@ describe("server API (C-06)", () => {
     const rc = await request(app).post(`/api/runs/${runId}/receipt`).send({});
     expect(rc.status).toBe(200);
     expect((rc.body as { trailer: string }).trailer).toMatch(/^RippleWitness-Receipt: /);
+    // K-06: full-mode ready run issues an L3 receipt (no artifacts declared).
+    expect((rc.body as { receipt: { payload: { assuranceTier: string; artifactHashes: unknown } } }).receipt.payload.assuranceTier).toBe("L3");
+    expect((rc.body as { receipt: { payload: { assuranceTier: string; artifactHashes: unknown } } }).receipt.payload.artifactHashes).toEqual({});
     const note = await exec("git", ["notes", "--ref=refs/notes/ripplewitness", "show", head], { cwd: repoPath });
     expect(note.stdout).toContain(runId);
     const again = await request(app).get(`/api/runs/${runId}/receipt`);
@@ -313,4 +347,168 @@ describe("server API (C-06)", () => {
     }
     db.close();
   });
+
+  it("IT-GR-PY-05: python subject with no static routes runs DYNAMIC-ONLY", async () => {
+    const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-dyn.db`));
+    const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wtdyn-")), home: mkdtempSync(join(tmpdir(), "rw-srv-homedyn-")) });
+    // No-decorator python HTTP subject: manual dispatch, so the static pass
+    // finds zero routes. Serves __routes with one never-hit extra id.
+    const repoPath = mkdtempSync(join(tmpdir(), "rw-dyn-"));
+    const git = (args: string[]): Promise<string> =>
+      exec("git", args, { cwd: repoPath }).then((r) => r.stdout.trim()) as Promise<string>;
+    await git(["init", "-q", "-b", "main", "."]);
+    await git(["config", "user.email", "t@local"]);
+    await git(["config", "user.name", "t"]);
+    writeFileSync(
+      join(repoPath, "server.py"),
+      `import json, os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+
+class H(BaseHTTPRequestHandler):
+    def _send(self, status, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def do_GET(self):
+        p = urlparse(self.path).path
+        if p == "/health":
+            return self._send(200, {"ok": True})
+        if p == "/ping":
+            return self._send(200, {"pong": True})
+        if p == "/__routes":
+            return self._send(200, {"routes": ["route:GET /ping", "route:GET /v1/extra"]})
+        return self._send(404, {"error": "not_found"})
+    def log_message(self, *args):
+        pass
+
+ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()
+`,
+    );
+    writeFileSync(join(repoPath, "requirements.txt"), "# none\n");
+    writeFileSync(join(repoPath, ".gitignore"), "__pycache__\n.venv\n");
+    const { default: Database } = await import("better-sqlite3");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(repoPath, "seed"), { recursive: true });
+    new Database(join(repoPath, "seed", "seed.db")).close();
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "base"]);
+    const base = await git(["rev-parse", "HEAD"]);
+    const scenariosDir = mkdtempSync(join(tmpdir(), "rw-dyn-scen-"));
+    writeFileSync(
+      join(scenariosDir, "ping.json"),
+      JSON.stringify({ id: "ping", group: "g", routeIds: ["route:GET /ping"], steps: [{ method: "GET", path: "/ping" }] }),
+    );
+    const started = await request(app).post("/api/analyze").send({
+      repoPath,
+      baseRef: base,
+      headRef: base,
+      scenariosDir,
+      flakeGuard: false,
+      language: "python",
+      appStart: ["python3", "server.py"],
+    });
+    expect(started.status).toBe(202);
+    const runId = (started.body as { runId: string }).runId;
+    let status = "";
+    for (let i = 0; i < 120; i++) {
+      const r = await request(app).get(`/api/runs/${runId}/status`);
+      status = (r.body as { status: string }).status;
+      if (status === "ready" || status === "static-only" || status === "failed") break;
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+    expect(status).toBe("ready");
+    const st = await request(app).get(`/api/runs/${runId}/status`);
+    expect((st.body as { reviewMode: string }).reviewMode).toBe("dynamic-only");
+    await request(app).post(`/api/runs/${runId}/predict`).send({ routeIds: [], nothingElse: true });
+    const reveal = await request(app).get(`/api/runs/${runId}/reveal`);
+    const nodes = (reveal.body as { nodes: { routeId: string; status: string }[] }).nodes;
+    expect(nodes.find((n) => n.routeId === "route:GET /ping")?.status).toBe("UNCHANGED");
+    // __routes inventory union: never-hit id surfaces as UNCOVERED, not QUIET.
+    expect(nodes.find((n) => n.routeId === "route:GET /v1/extra")?.status).toBe("UNCOVERED");
+    expect(nodes.some((n) => n.status === "SURPRISE")).toBe(false);
+    db.close();
+  });
+
+  it("CT-HRV-E2E: harvest adopts the subject suite's deterministic calls", async () => {
+    const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-hrv.db`));
+    const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wthrv-")), home: mkdtempSync(join(tmpdir(), "rw-srv-homehrv-")) });
+    const repoPath = mkdtempSync(join(tmpdir(), "rw-hrv-"));
+    cpSync(SHOPPY, repoPath, { recursive: true, filter: (s) => !s.includes("__pycache__") && !s.includes(".venv") && !s.includes(".git") });
+    await exec("git", ["init", "-q", "-b", "main", "."], { cwd: repoPath });
+    await exec("git", ["config", "user.email", "t@local"], { cwd: repoPath });
+    await exec("git", ["config", "user.name", "t"], { cwd: repoPath });
+    await exec("git", ["add", "-A"], { cwd: repoPath });
+    await exec("git", ["commit", "-qm", "base"], { cwd: repoPath });
+    const base = (await exec("git", ["rev-parse", "HEAD"], { cwd: repoPath })).stdout.trim();
+    const started = await request(app).post("/api/analyze").send({
+      repoPath,
+      baseRef: base,
+      headRef: base,
+      scenariosDir: SCENPY,
+      flakeGuard: false,
+      language: "python",
+      appStart: ["python3", "server.py"],
+    });
+    expect(started.status).toBe(202);
+    const runId = (started.body as { runId: string }).runId;
+    let status = "";
+    for (let i = 0; i < 180; i++) {
+      const r = await request(app).get(`/api/runs/${runId}/status`);
+      status = (r.body as { status: string }).status;
+      if (status === "ready" || status === "static-only" || status === "failed") break;
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+    expect(status).toBe("ready");
+    await request(app).post(`/api/runs/${runId}/predict`).send({ routeIds: [], nothingElse: true });
+    const harvested = await request(app).post(`/api/runs/${runId}/harvest`);
+    expect(harvested.status).toBe(200);
+    expect((harvested.body as { flips: unknown[] }).flips).toEqual([]);
+    // All three suite calls are deterministic: adopted as scenarios.
+    expect((harvested.body as { kept: string[] }).kept).toHaveLength(3);
+    expect((harvested.body as { dropped: unknown[] }).dropped).toEqual([]);
+    db.close();
+  }, 420000);
+
+  it("CT-FRG-E2E: forge synthesizes OpenAPI candidates and adopts deterministic ones", async () => {
+    const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-frg.db`));
+    const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wtfrg-")), home: mkdtempSync(join(tmpdir(), "rw-srv-homefrg-")) });
+    const repoPath = mkdtempSync(join(tmpdir(), "rw-frg-"));
+    cpSync(SHOPPY, repoPath, { recursive: true, filter: (s) => !s.includes("__pycache__") && !s.includes(".venv") && !s.includes(".git") });
+    await exec("git", ["init", "-q", "-b", "main", "."], { cwd: repoPath });
+    await exec("git", ["config", "user.email", "t@local"], { cwd: repoPath });
+    await exec("git", ["config", "user.name", "t"], { cwd: repoPath });
+    await exec("git", ["add", "-A"], { cwd: repoPath });
+    await exec("git", ["commit", "-qm", "base"], { cwd: repoPath });
+    const base = (await exec("git", ["rev-parse", "HEAD"], { cwd: repoPath })).stdout.trim();
+    const started = await request(app).post("/api/analyze").send({
+      repoPath,
+      baseRef: base,
+      headRef: base,
+      scenariosDir: SCENPY,
+      flakeGuard: false,
+      language: "python",
+      appStart: ["python3", "server.py"],
+    });
+    expect(started.status).toBe(202);
+    const runId = (started.body as { runId: string }).runId;
+    let status = "";
+    for (let i = 0; i < 180; i++) {
+      const r = await request(app).get(`/api/runs/${runId}/status`);
+      status = (r.body as { status: string }).status;
+      if (status === "ready" || status === "static-only" || status === "failed") break;
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+    expect(status).toBe("ready");
+    await request(app).post(`/api/runs/${runId}/predict`).send({ routeIds: [], nothingElse: true });
+    const forged = await request(app).post(`/api/runs/${runId}/forge`);
+    expect(forged.status).toBe(200);
+    expect((forged.body as { synthesized: number }).synthesized).toBe(11);
+    expect((forged.body as { kept: string[] }).kept).toHaveLength(11);
+    expect((forged.body as { dropped: unknown[] }).dropped).toEqual([]);
+    db.close();
+  }, 420000);
 });
