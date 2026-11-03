@@ -1,0 +1,14 @@
+diff --git a/main.go b/main.go
+index 7c58f55..46aa9de 100644
+--- a/main.go
++++ b/main.go
+@@ -51,6 +51,9 @@ func main() {
+ 			return
+ 		}
+ 		lineTotal := priceOf(body.SKU) * body.Qty
++		if body.Qty >= 2 {
++			lineTotal = lineTotal * 9 / 10 // bulk 10% off
++		}
+ 		cartTotal += lineTotal
+ 		writeJSON(w, map[string]int{"lineTotal": lineTotal, "cartTotal": cartTotal})
+ 	})

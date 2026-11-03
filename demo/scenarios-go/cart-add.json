@@ -1,0 +1,6 @@
+{
+  "id": "cart-add",
+  "group": "cart",
+  "routeIds": ["route:POST /cart/add"],
+  "steps": [{ "method": "POST", "path": "/cart/add", "body": { "sku": "SKU-1", "qty": 2 } }]
+}

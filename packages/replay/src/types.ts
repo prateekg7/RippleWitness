@@ -14,6 +14,8 @@ export interface SideResult {
   /** group -> table -> sha256 hex */
   dbHash: Record<string, Record<string, string>>;
   outbound: string[];
+  /** Route ids from `GET /__routes` (best-effort; [] when absent). */
+  routes: string[];
 }
 
 export type ReplayResult =
@@ -40,4 +42,6 @@ export interface ReplayOptions {
   healthTimeoutMs?: number;
   /** Extra env allow-list entries merged over the replay env. */
   env?: Record<string, string>;
+  /** Subject language (TRD §7.2). Default "node" preserves v1 behavior. */
+  language?: "node" | "python" | "go";
 }

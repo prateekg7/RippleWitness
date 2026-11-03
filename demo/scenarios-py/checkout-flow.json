@@ -1,0 +1,15 @@
+{
+  "id": "checkout-flow",
+  "group": "checkout",
+  "routeIds": ["route:POST /cart", "route:POST /checkout", "route:GET /orders"],
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/cart",
+      "body": { "user": "regular-1", "items": [{ "sku": "SKU-1", "qty": 2 }] },
+      "capture": { "cartId": "$.id" }
+    },
+    { "method": "POST", "path": "/checkout", "body": { "cartId": "{{cartId}}", "user": "regular-1" } },
+    { "method": "GET", "path": "/orders" }
+  ]
+}

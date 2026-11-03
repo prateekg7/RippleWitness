@@ -1,0 +1,37 @@
+{
+  "prs": [
+    {
+      "id": "PR-PY-00",
+      "patch": "PR-PY-00.patch",
+      "title": "Add VIP discount to checkout (Python subject)",
+      "files": ["app.py"],
+      "designed": {
+        "observed": ["route:POST /checkout", "route:GET /reports/sales"],
+        "surprise": ["route:GET /reports/sales"],
+        "note": "Py scenarios exercise orders only with regular-1 (discount 0), so orders is unaffected; vip checkout + reports change."
+      }
+    },
+    {
+      "id": "PR-PY-01",
+      "patch": "PR-PY-01.patch",
+      "title": "Model weight micro-update (within tolerance)",
+      "files": ["model.json"],
+      "designed": {
+        "observed": [],
+        "surprise": [],
+        "note": "dy=1e-6 < atol+rtol*|y| (~8.8e-6): tolerated, never observed-changed. Expects tolerated [$.y]."
+      }
+    },
+    {
+      "id": "PR-PY-02",
+      "patch": "PR-PY-02.patch",
+      "title": "Model weight update (above tolerance)",
+      "files": ["model.json"],
+      "designed": {
+        "observed": ["route:POST /predict"],
+        "surprise": [],
+        "note": "dy=0.5 >> tolerance: real change on the predict route."
+      }
+    }
+  ]
+}

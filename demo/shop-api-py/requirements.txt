@@ -1,0 +1,3 @@
+# Stdlib-only subject: intentionally no third-party requirements.
+# The file exists so language detection finds a Python manifest and the
+# venv+pip lifecycle path (J-04) is exercised for real (no-op install).

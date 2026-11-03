@@ -1,0 +1,37 @@
+diff --git a/app.py b/app.py
+index 1dd28bb..09ac252 100644
+--- a/app.py
++++ b/app.py
+@@ -45,6 +45,10 @@ def cart_subtotal(db, cart_id):
+     return sum(r["qty"] * r["price_cents"] for r in rows)
+ 
+ 
++def vip_discount(subtotal):
++    return int(subtotal * 0.1 + 0.5)
++
++
+ def shipping_for(subtotal):
+     return 0 if subtotal >= FREE_SHIPPING_THRESHOLD else SHIPPING_FLAT
+ 
+@@ -141,7 +145,9 @@ def checkout(req, params, query):
+         raise _HttpError(404, "cart_not_found")
+     subtotal = cart_subtotal(db, cart_id)
+     shipping = shipping_for(subtotal)
+-    total = subtotal + shipping
++    buyer = db.execute("SELECT is_vip FROM users WHERE id = ?", (body.get("user", "regular-1"),)).fetchone()
++    discount = vip_discount(subtotal) if (buyer and buyer["is_vip"]) else 0
++    total = subtotal + shipping - discount
+     order_id = _next_id()
+     db.execute(
+         "INSERT INTO orders (id, user_id, total_cents, created_at) VALUES (?, ?, ?, ?)",
+@@ -149,7 +155,9 @@ def checkout(req, params, query):
+     )
+     db.commit()
+     bus.emit("order.completed", {"total": total, "orderId": order_id})
+-    return 201, {"orderId": order_id, "subtotal": subtotal, "shipping": shipping, "total": total}
++    if discount > 0:
++        bus.emit("discount.applied", {"total": total, "orderId": order_id, "discount": discount})
++    return 201, {"orderId": order_id, "subtotal": subtotal, "shipping": shipping, "total": total, "discount": discount}
+ 
+ 
+ @app.route("/orders", methods=["GET"])

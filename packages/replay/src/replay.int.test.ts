@@ -17,6 +17,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const SHOP = join(ROOT, "demo", "shop-api");
 const SCEN = join(ROOT, "demo", "scenarios");
 const PRS = join(ROOT, "demo", "prs");
+const SHOPJS = join(ROOT, "demo", "shop-api-js");
+const PRSJS = join(ROOT, "demo", "prs-js");
+const SHOPPY = join(ROOT, "demo", "shop-api-py");
+const SCENPY = join(ROOT, "demo", "scenarios-py");
+const PRSPY = join(ROOT, "demo", "prs-py");
+const SHOPGO = join(ROOT, "demo", "shop-api-go");
+const SCENGO = join(ROOT, "demo", "scenarios-go");
+const PRSGO = join(ROOT, "demo", "prs-go");
+const PY_START = ["python3", "server.py"];
 
 const APP_START = ["corepack", "pnpm", "start"];
 const tmpRoots: string[] = [];
@@ -277,5 +286,337 @@ describe("replay integration (C-02/C-03/C-04)", () => {
     });
     expect(changedByScenario.has("checkout-vip")).toBe(true);
     expect(changedByScenario.has("reports-after-checkout")).toBe(true);
+  });
+});
+
+describe("pytest harvesting (F-24)", () => {
+  it("CT-HRV-LIVE: runHarvest parses outcomes and captured calls", async () => {
+    // Provision pytest in a scratch venv; skip with reason when offline.
+    const venv = track(mkdtempSync(join(tmpdir(), "rw-harv-venv-")));
+    try {
+      await execa("python3", ["-m", "venv", join(venv, "env")], { timeout: 120000 });
+      await execa(join(venv, "env", "bin", "pip"), ["install", "--disable-pip-version-check", "pytest"], { timeout: 180000 });
+    } catch {
+      console.log("CT-HRV-LIVE skipped: cannot provision pytest (offline?)");
+      return;
+    }
+    const proj = track(mkdtempSync(join(tmpdir(), "rw-harv-proj-")));
+    writeFileSync(
+      join(proj, "test_sample.py"),
+      `import http.client
+
+def test_call():
+    c = http.client.HTTPConnection("127.0.0.1", 9)
+    try:
+        c.request("GET", "/items/1", headers={"authorization": "Bearer x"})
+    except OSError:
+        pass
+
+def test_fail():
+    assert False
+`,
+    );
+    const { runHarvest } = await import("./harvest.js");
+    const r = await runHarvest(proj, { python: join(venv, "env", "bin", "python"), timeoutMs: 120000 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.result.tests).toEqual([
+      { id: "test_sample.py::test_call", outcome: "passed" },
+      { id: "test_sample.py::test_fail", outcome: "failed" },
+    ]);
+    expect(r.result.calls).toHaveLength(1);
+    expect(r.result.calls[0]).toMatchObject({ test: "test_sample.py::test_call", method: "GET" });
+    expect(r.result.calls[0]?.url).toContain("/items/1");
+    expect(r.result.calls[0]?.headers).not.toHaveProperty("authorization");
+  }, 240000);
+});
+
+describe("compute scenarios (F-23)", () => {
+  const MLIB_BASE = `class Token:
+    def __init__(self, v):
+        self.v = v
+
+
+FACTOR = 2
+
+
+def score(x):
+    return {"y": x * FACTOR}
+
+
+def boom(x):
+    if x < 0:
+        raise ValueError("kaput")
+    return x
+
+
+def tokenize(x):
+    return Token(x)
+`;
+
+  async function buildLibRepo(): Promise<{ repoPath: string; base: string; head: string; scenariosDir: string }> {
+    const repoPath = track(mkdtempSync(join(tmpdir(), "rw-compute-")));
+    const git = (args: string[]): Promise<string> =>
+      execa("git", args, { cwd: repoPath }).then((r) => r.stdout.trim()) as Promise<string>;
+    await git(["init", "-q", "-b", "main", "."]);
+    await git(["config", "user.email", "t@local"]);
+    await git(["config", "user.name", "t"]);
+    writeFileSync(join(repoPath, "mlib.py"), MLIB_BASE);
+    writeFileSync(join(repoPath, ".gitignore"), "__pycache__\n");
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "base"]);
+    const base = await git(["rev-parse", "HEAD"]);
+    await git(["checkout", "-qb", "head"]);
+    writeFileSync(join(repoPath, "mlib.py"), MLIB_BASE.replace("FACTOR = 2", "FACTOR = 3"));
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "head"]);
+    const head = await git(["rev-parse", "HEAD"]);
+    const scenariosDir = track(mkdtempSync(join(tmpdir(), "rw-compute-scen-")));
+    const scen = (id: string, target: string, args: unknown[], route: string): void => {
+      writeFileSync(
+        join(scenariosDir, `${id}.json`),
+        JSON.stringify({ id, group: "ml", kind: "compute", target, args, routeIds: [route] }),
+      );
+    };
+    scen("compute-score", "mlib:score", [2], "fn:mlib:score");
+    scen("compute-boom", "mlib:boom", [-1], "fn:mlib:boom");
+    scen("compute-token", "mlib:tokenize", ["a"], "fn:mlib:tokenize");
+    return { repoPath, base, head, scenariosDir };
+  }
+
+  it("CT-CMP-01: pure-function outputs diff and attribute to fn: ids", async () => {
+    const lib = await buildLibRepo();
+    const r = await runReplay({
+      repoPath: lib.repoPath,
+      baseRef: lib.base,
+      headRef: lib.head,
+      scenariosDir: lib.scenariosDir,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      workRoot: track(join(tmpdir(), `rw-work-cmp-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.base.steps).toHaveLength(3);
+    const byId = new Map(r.base.steps.map((s, i) => [s.scenarioId, { s, h: r.head.steps[i] as (typeof r.head.steps)[number] }]));
+    const score = byId.get("compute-score") as { s: (typeof r.base.steps)[number]; h: (typeof r.head.steps)[number] };
+    expect(score.s.body).toEqual({ y: 4 });
+    expect(score.h.body).toEqual({ y: 6 });
+    expect(diffSteps(score.s, score.h).changed).toBe(true);
+    expect(score.s.method).toBe("CALL");
+    expect(score.s.path).toBe("fn:mlib:score");
+  });
+
+  it("CT-CMP-02: head-only raise is a typed error observation; the run completes", async () => {
+    const lib = await buildLibRepo();
+    const r = await runReplay({
+      repoPath: lib.repoPath,
+      baseRef: lib.base,
+      headRef: lib.head,
+      scenariosDir: lib.scenariosDir,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      workRoot: track(join(tmpdir(), `rw-work-cmp2-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const boom = r.base.steps.find((s) => s.scenarioId === "compute-boom") as (typeof r.base.steps)[number];
+    expect(boom.status).toBe(500);
+    expect(JSON.stringify(boom.body)).toContain("ValueError");
+  });
+
+  it("IT-REP-11: python subject replays; PR-PY-00 ripple observed on reports", async () => {
+    const subj = await buildSubjectRepo(SHOPPY, PRSPY, ["PR-PY-00.patch"]);
+    track(subj.repoPath);
+    const r = await runReplay({
+      repoPath: subj.repoPath,
+      baseRef: subj.base,
+      headRef: subj.heads["PR-PY-00"] as string,
+      scenariosDir: SCENPY,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      appStart: PY_START,
+      workRoot: track(join(tmpdir(), `rw-work-rep11-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Python lifecycle strategies: requirements -> venv install, else none.
+    const { ensureDeps } = await import("./deps.js");
+    const { existsSync } = await import("node:fs");
+    const withReq = track(mkdtempSync(join(tmpdir(), "rw-pydeps-")));
+    writeFileSync(join(withReq, "requirements.txt"), "# none\n");
+    const installed = await ensureDeps(withReq, withReq, "a", "a", { language: "python" });
+    expect(installed.strategy).toBe("install");
+    expect(existsSync(join(withReq, ".venv", "bin", "python"))).toBe(true);
+    const bare = track(mkdtempSync(join(tmpdir(), "rw-pydeps-bare-")));
+    expect((await ensureDeps(bare, bare, "a", "a", { language: "python" })).strategy).toBe("none");
+    const changed = new Set<string>();
+    r.base.steps.forEach((s, i) => {
+      if (diffSteps(s, r.head.steps[i] as (typeof r.head.steps)[number]).changed) changed.add(s.scenarioId);
+    });
+    expect(changed.has("reports-after-checkout")).toBe(true);
+    expect(changed.has("checkout-flow")).toBe(true);
+    expect(changed.has("health-ok")).toBe(false);
+  });
+
+  it("IT-REP-12: JS subject replays with package.json start discovery (no appStart)", async () => {
+    const subj = await buildSubjectRepo(SHOPJS, PRSJS, ["PR-JS-00.patch"]);
+    track(subj.repoPath);
+    const scenariosDir = track(subsetScenariosDir(SCEN, ["checkout", "reports"], "rep12"));
+    const r = await runReplay({
+      repoPath: subj.repoPath,
+      baseRef: subj.base,
+      headRef: subj.heads["PR-JS-00"] as string,
+      scenariosDir,
+      seedDbRel: "seed/seed.db",
+      workRoot: track(join(tmpdir(), `rw-work-rep12-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const changed = new Set<string>();
+    r.base.steps.forEach((s, i) => {
+      if (diffSteps(s, r.head.steps[i] as (typeof r.head.steps)[number]).changed) changed.add(s.scenarioId);
+    });
+    expect(changed.has("reports-after-checkout")).toBe(true);
+  });
+
+  it("IT-REP-13: direct Date.now/Math.random use is frozen by interposition", async () => {
+    const repoPath = track(mkdtempSync(join(tmpdir(), "rw-noisy-")));
+    const git = (args: string[]): Promise<string> =>
+      execa("git", args, { cwd: repoPath }).then((x) => x.stdout.trim()) as Promise<string>;
+    await git(["init", "-q", "-b", "main", "."]);
+    await git(["config", "user.email", "t@local"]);
+    await git(["config", "user.name", "t"]);
+    writeFileSync(
+      join(repoPath, "server.js"),
+      `import http from "node:http";
+const srv = http.createServer((req, res) => {
+  res.setHeader("content-type", "application/json");
+  if (req.url === "/health") return res.end(JSON.stringify({ ok: true }));
+  res.end(JSON.stringify({ at: Date.now(), r: Math.random() }));
+});
+srv.listen(Number(process.env.PORT), "127.0.0.1");\n`,
+    );
+    writeFileSync(join(repoPath, "package.json"), JSON.stringify({ name: "noisy", type: "module", scripts: { start: "node server.js" } }));
+    writeFileSync(join(repoPath, ".gitignore"), "node_modules\n");
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "base"]);
+    const base = await git(["rev-parse", "HEAD"]);
+    const scenariosDir = track(mkdtempSync(join(tmpdir(), "rw-noisy-scen-")));
+    writeFileSync(
+      join(scenariosDir, "noisy.json"),
+      JSON.stringify({ id: "noisy", group: "g", routeIds: ["route:GET /"], steps: [{ method: "GET", path: "/" }] }),
+    );
+    const opts = {
+      repoPath,
+      baseRef: base,
+      headRef: base,
+      scenariosDir,
+      seedDbRel: "seed/seed.db",
+      workRoot: track(join(tmpdir(), `rw-work-rep13-${Date.now()}`)),
+    };
+    // Seed DB required for HTTP replay even though the app ignores it.
+    const { mkdirSync } = await import("node:fs");
+    const { default: Database } = await import("better-sqlite3");
+    mkdirSync(join(repoPath, "seed"), { recursive: true });
+    new Database(join(repoPath, "seed", "seed.db")).close();
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "seed"]);
+    const withSeed = await git(["rev-parse", "HEAD"]);
+    const a = await runReplay({ ...opts, baseRef: withSeed, headRef: withSeed });
+    expect(a.ok).toBe(true);
+    if (!a.ok) return;
+    const b = await runReplay({ ...opts, baseRef: withSeed, headRef: withSeed, workRoot: track(join(tmpdir(), `rw-work-rep13b-${Date.now()}`)) });
+    expect(b.ok).toBe(true);
+    if (!b.ok) return;
+    expect(JSON.stringify(a.base.steps)).toBe(JSON.stringify(b.base.steps));
+    expect((a.base.steps[0]?.body as { at: number }).at).toBe(Date.parse("2026-01-01T00:00:00Z"));
+  });
+
+  it("IT-REP-14: tolerated micro-change hides, macro-change shows (python ML)", async () => {
+    const subj = await buildSubjectRepo(SHOPPY, PRSPY, ["PR-PY-01.patch", "PR-PY-02.patch"]);
+    track(subj.repoPath);
+    const scenariosDir = track(subsetScenariosDir(SCENPY, ["ml"], "rep14"));
+    const { loadScenarios } = await import("./runner.js");
+    const tolerances = loadScenarios(scenariosDir).find((s) => s.id === "predict-basic")?.tolerances ?? [];
+    const micro = await runReplay({
+      repoPath: subj.repoPath,
+      baseRef: subj.base,
+      headRef: subj.heads["PR-PY-01"] as string,
+      scenariosDir,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      appStart: PY_START,
+      workRoot: track(join(tmpdir(), `rw-work-rep14a-${Date.now()}`)),
+    });
+    expect(micro.ok).toBe(true);
+    if (!micro.ok) return;
+    const md = diffSteps(micro.base.steps[0] as (typeof micro.base.steps)[number], micro.head.steps[0] as (typeof micro.head.steps)[number], { tolerances });
+    expect(md.changed).toBe(false);
+    expect(md.tolerated.map((t) => t.path)).toEqual(["$.y"]);
+    const macro = await runReplay({
+      repoPath: subj.repoPath,
+      baseRef: subj.base,
+      headRef: subj.heads["PR-PY-02"] as string,
+      scenariosDir,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      appStart: PY_START,
+      workRoot: track(join(tmpdir(), `rw-work-rep14b-${Date.now()}`)),
+    });
+    expect(macro.ok).toBe(true);
+    if (!macro.ok) return;
+    const gd = diffSteps(macro.base.steps[0] as (typeof macro.base.steps)[number], macro.head.steps[0] as (typeof macro.head.steps)[number], { tolerances });
+    expect(gd.changed).toBe(true);
+  });
+
+  it("CT-CMP-03: non-serializable returns become typed observations, never a runner crash", async () => {
+    const lib = await buildLibRepo();
+    const r = await runReplay({
+      repoPath: lib.repoPath,
+      baseRef: lib.base,
+      headRef: lib.head,
+      scenariosDir: lib.scenariosDir,
+      seedDbRel: "seed/seed.db",
+      language: "python",
+      workRoot: track(join(tmpdir(), `rw-work-cmp3-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const tok = r.base.steps.find((s) => s.scenarioId === "compute-token") as (typeof r.base.steps)[number];
+    expect(tok.status).toBe(200);
+    expect(tok.body).toMatchObject({ __type__: "Token" });
+  });
+
+  it("IT-REP-GO-01: go subject replays via discovered `go run`; PR-GO-00 ripple on cart+reports", async () => {
+    try {
+      await execa("go", ["version"]);
+    } catch {
+      console.log("IT-REP-GO-01 skipped: go toolchain not on PATH");
+      return;
+    }
+    const subj = await buildSubjectRepo(SHOPGO, PRSGO, ["PR-GO-00.patch"]);
+    track(subj.repoPath);
+    const r = await runReplay({
+      repoPath: subj.repoPath,
+      baseRef: subj.base,
+      headRef: subj.heads["PR-GO-00"] as string,
+      scenariosDir: SCENGO,
+      seedDbRel: "seed/seed.db",
+      language: "go",
+      // No appStart: discovery must yield `go run .`. Generous health budget:
+      // the first cold compile in a fresh GOCACHE is slow, later boots are warm.
+      healthTimeoutMs: 90000,
+      workRoot: track(join(tmpdir(), `rw-work-repgo1-${Date.now()}`)),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const changed = new Set<string>();
+    r.base.steps.forEach((s, i) => {
+      if (diffSteps(s, r.head.steps[i] as (typeof r.head.steps)[number]).changed) changed.add(s.scenarioId);
+    });
+    expect(changed.has("cart-add")).toBe(true);
+    expect(changed.has("reports-after-cart")).toBe(true);
+    expect(changed.has("health-ok")).toBe(false);
   });
 });

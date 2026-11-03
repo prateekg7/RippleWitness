@@ -33,7 +33,8 @@ export async function buildSubjectRepo(
   // `git add -A` in tests cannot sweep the symlink source into a commit
   // (which would delete it from the workdir on branch checkout).
   // NOTE: no trailing slash — `node_modules/` does not match a symlink.
-  writeFileSync(join(repoPath, ".gitignore"), "node_modules\n");
+  const isPython = existsSync(join(shopSrc, "requirements.txt"));
+  writeFileSync(join(repoPath, ".gitignore"), isPython ? "node_modules\n__pycache__\n.venv\n" : "node_modules\n");
   await git(["add", "-A"]);
   await git(["commit", "-qm", "base"]);
   const base = (await execa("git", ["rev-parse", "HEAD"], { cwd: repoPath })).stdout.trim();
@@ -49,7 +50,10 @@ export async function buildSubjectRepo(
   }
   // Untracked node_modules source so replays exercise the symlink strategy
   // (mirrors the real layout where the subject checkout has installed deps).
-  symlinkSync(join(shopSrc, "node_modules"), join(repoPath, "node_modules"), "dir");
+  // Python subjects bring no node_modules; their venv is built per worktree.
+  if (existsSync(join(shopSrc, "node_modules"))) {
+    symlinkSync(join(shopSrc, "node_modules"), join(repoPath, "node_modules"), "dir");
+  }
   return { repoPath, base, heads };
 }
 

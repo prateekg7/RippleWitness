@@ -16,7 +16,9 @@ export class ProcRegistry {
   }
 
   async killAll(signal: NodeJS.Signals = "SIGTERM"): Promise<void> {
+    const pids: number[] = [];
     for (const child of [...this.children]) {
+      if (child.pid !== undefined) pids.push(child.pid);
       try {
         if (child.pid !== undefined) process.kill(-child.pid, signal);
       } catch {
@@ -29,6 +31,17 @@ export class ProcRegistry {
       this.children.delete(child);
     }
     await new Promise((r) => setTimeout(r, 300));
+    // A subject server can trap SIGTERM and keep the port; escalate so
+    // teardown never leaks processes or ports into the next run.
+    for (const pid of pids) {
+      try {
+        process.kill(-pid, 0);
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        /* group already gone */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 100));
   }
 
   get size(): number {
