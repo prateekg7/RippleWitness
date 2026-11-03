@@ -88,8 +88,8 @@ markdown), `ripplewitness import-har` (recorded traffic → scenarios),
 - `packages/{core,graph,replay,crossexam,agents,receipt,canary}` — pipeline stages
 - `demo/shop-api` — deterministic subject app (12 routes, event bus, seeded SQLite)
 - `demo/scenarios` — 42 replay fixtures; `demo/prs` — 8 hand-authored PR patches + labels
-- `eval/` — benchmark harness; `docs/` — spikes, demo script, submission notes
+- `eval/` — benchmark harness; `docs/` — spikes, live-run evidence, bug log, demo script, submission notes
 
-Spec docs: `PRD.md`, `TRD.md`, `ARCHITECTURE.md`, `TASKS.md`, `TESTS_AND_BUGS.md`,
-`AUDIT.md`, `AGENTS.md`. Cost rule: agent runs/prompts are reused from the
-session store, never regenerated; fixtures are hand-authored (AGENTS §A5b).
+Planning docs (`PRD.md`, `TRD.md`, …) live with the author, not in this repo.
+Cost rule: agent runs/prompts are reused from the session store, never
+regenerated; fixtures are hand-authored.
