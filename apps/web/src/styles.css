@@ -57,6 +57,16 @@ label { display: block; margin: 6px 0; }
 .pill.confirmed { background: var(--accent); color: #fff; }
 .pill.cleared, .pill.quiet { background: #d8d2c2; }
 .pill.unverified, .pill.diff { background: var(--warn); color: #fff; }
+.pill.calibration { background: var(--card); border-style: dashed; display: block; margin: 4px 0; font-weight: 400; }
+.pill.dynamic-only { background: var(--ink); color: var(--paper); display: block; margin: 4px 0; }
+div.diff { background: var(--paper); border: 2px solid var(--ink); padding: 8px; overflow-x: auto; }
+.diff-header { font-weight: 700; margin-bottom: 4px; }
+.diff-line { white-space: pre-wrap; }
+.diff-no { display: inline-block; width: 3em; opacity: 0.55; user-select: none; }
+.diff-add { background: #dcebd8; }
+.diff-del { background: #f3d3d3; }
+.diff-empty { background: #e4dfd2; }
+table.diff-split td { vertical-align: top; white-space: pre-wrap; word-break: break-word; }
 .error { color: var(--bad); font-weight: 700; }
 .muted { opacity: 0.75; }
 footer { border-top: 3px solid var(--ink); padding: 8px 16px; font-size: 12px; }
