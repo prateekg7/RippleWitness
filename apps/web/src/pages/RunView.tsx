@@ -500,7 +500,7 @@ function MetricsLine(props: { runId: string }): React.JSX.Element {
           .map(([a, s]) => `${a} ${s.schemaValid}/${s.calls} valid`)
           .join(", ");
         setLine(
-          `${m.calls} calls · ${m.tokensIn + m.tokensOut} tokens · ${m.schemaRepairs} repairs · ${m.transportRetries} retries · ${m.timeouts} timeouts · ${m.cacheHits} cache hits${agents ? ` · ${agents}` : ""}`,
+          `${m.calls} calls · ${m.tokensIn + m.tokensOut} tokens · ${m.schemaRepairs} repairs · ${m.transportRetries} retries · ${m.timeouts} timeouts · ${m.cacheHits} cache hits · ${m.fallbackCalls} fallbacks${agents ? ` · ${agents}` : ""}`,
         );
       })
       .catch(() => setLine("NO-LLM: no model calls on this run (deterministic core only)."));

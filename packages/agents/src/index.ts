@@ -17,9 +17,11 @@ export {
   MetaDegraded,
   USER_CONTENT_CHAR_LIMIT,
   clearRunClients,
+  fallbackChainLabels,
   metaClientForRun,
+  parseFallbackEnv,
 } from "./meta.js";
-export type { MetaCallContext, MetaMetrics, MetaOptions } from "./meta.js";
+export type { MetaCallContext, MetaFallbackOptions, MetaMetrics, MetaOptions } from "./meta.js";
 export type { PhraserTone } from "./phraser.js";
 export { phraseQuestion } from "./phraser.js";
 export type { CanaryPlan, PlanHunk } from "./canary-planner.js";

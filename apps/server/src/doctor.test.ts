@@ -11,6 +11,25 @@ describe("doctor (FR-22 stub)", () => {
     expect(byName.meta_model?.detail).toContain("muse-spark-1.3 (default)");
     const custom = await runDoctor({ META_MODEL: "m", META_BASE_URL: "https://e.example" } as NodeJS.ProcessEnv);
     expect(custom.find((c) => c.name === "meta_model")?.detail).toBe("model=m endpoint=https://e.example");
+    const mismatched = await runDoctor({
+      META_FALLBACK_MODELS: "open-one,open-two",
+      META_FALLBACK_BASE_URLS: "http://127.0.0.1:8000/v1",
+    } as NodeJS.ProcessEnv);
+    expect(mismatched.find((c) => c.name === "meta_model")?.detail).toContain("fallback=misconfigured");
+    const remote = await runDoctor({
+      META_FALLBACK_MODELS: "open-one",
+      META_FALLBACK_BASE_URLS: "https://models.example.com/v1",
+    } as NodeJS.ProcessEnv);
+    expect(remote.find((c) => c.name === "meta_model")?.detail).toContain("fallback=misconfigured");
+    const fallback = await runDoctor({
+      META_FALLBACK_MODELS: "open-one,open-two",
+      META_FALLBACK_BASE_URLS: "http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1",
+      META_FALLBACK_API_KEYS: "fallback-secret,",
+    } as NodeJS.ProcessEnv);
+    expect(fallback.find((c) => c.name === "meta_model")?.detail).toBe(
+      "model=muse-spark-1.3 (default) endpoint=https://api.meta.ai/v1 (default) fallback=open-one@http://127.0.0.1:8000/v1 + open-two@http://127.0.0.1:8001/v1",
+    );
+    expect(JSON.stringify(fallback)).not.toContain("fallback-secret");
     expect(JSON.stringify(checks)).not.toContain("sk-test-not-real");
   });
 });

@@ -153,6 +153,8 @@ export const api = {
           tokensOut: number;
           latencyMs: number;
           cacheHits: number;
+          fallbackCalls: number;
+          models: Record<string, number>;
           perAgent: Record<string, { calls: number; schemaValid: number; repairs: number }>;
         };
       }>,
