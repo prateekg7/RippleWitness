@@ -147,7 +147,17 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
 
   app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-  app.get("/api/config", (_req: Request, res: Response) => res.json({ lockedRun: opts.lockedRun ?? null }));
+  app.get("/api/config", (_req: Request, res: Response) =>
+    res.json({
+      lockedRun: opts.lockedRun ?? null,
+      // Non-secret capability flags so the UI can explain, before a click,
+      // why model-backed features will or will not work on this deployment.
+      capabilities: {
+        llm: Boolean(opts.extractor || opts.reviewer || opts.summarizer || opts.explainer || opts.planner || opts.phraser),
+        agentSession: opts.session instanceof MockSession ? "stub" : opts.session ? "live" : "stub",
+      },
+    }),
+  );
 
   app.get("/api/runs", (_req: Request, res: Response) => {
     const rows = db.prepare("SELECT id, status, createdAt FROM runs ORDER BY createdAt DESC LIMIT 20").all();

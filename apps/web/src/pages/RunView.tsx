@@ -194,6 +194,8 @@ export function RunView(props: { runId: string }): React.JSX.Element {
   const [error, setError] = useState("");
   const [askBusyId, setAskBusyId] = useState<string | null>(null);
   const [askErrors, setAskErrors] = useState<Record<string, string>>({});
+  const [hostedDemo, setHostedDemo] = useState(false);
+  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -213,6 +215,16 @@ export function RunView(props: { runId: string }): React.JSX.Element {
       setError(String(err));
     }
   }, [runId]);
+
+  useEffect(() => {
+    api
+      .config()
+      .then((r) => {
+        setHostedDemo(Boolean(r.lockedRun));
+        setLlmConfigured(Boolean(r.capabilities?.llm));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -354,6 +366,15 @@ export function RunView(props: { runId: string }): React.JSX.Element {
               canIssue={reveal.score.passed || Boolean(reveal.overrideReason)}
               blockedReason="Receipt is blocked until the gate passes — or you record an override reason under Gate score above. That keeps a failed prediction from being silently receipted."
             />
+            {hostedDemo && (
+              <p className="demo-note">
+                <strong>Why this can fail in the demo:</strong> if the prediction gate did not pass and no override
+                is recorded, receipt issuance is intentionally refused. Also, this free hosted demo keeps runs and
+                its signing key in ephemeral storage, so after a restart or redeploy this run may disappear and an
+                older demo receipt may need to be issued again. For a durable receipt, run RippleWitness locally
+                with a persistent <code>RIPPLEWITNESS_HOME</code>.
+              </p>
+            )}
           </section>
 
           <section>
@@ -369,6 +390,21 @@ export function RunView(props: { runId: string }): React.JSX.Element {
           <section>
             <h2>Summary</h2>
             <SummaryBox runId={runId} />
+            {hostedDemo && llmConfigured === false && (
+              <p className="demo-note">
+                <strong>Why this will fail in the demo:</strong> Write summary needs a server-side Meta model. This
+                public demo does not bundle a shared <code>META_API_KEY</code> — keys are never sent to the browser —
+                so Summary returns “unavailable” here unless the host has configured that secret. Run the local
+                clone with the key exported from <code>.env</code>, or set <code>META_API_KEY</code> on the host,
+                to use it. The blast map, gate, questions, and receipt above do not need the key.
+              </p>
+            )}
+            {hostedDemo && llmConfigured === true && (
+              <p className="demo-note">
+                <strong>Demo note:</strong> Summary is using the hosted server’s configured Meta model. The wording
+                can vary between runs, but the unverified list is still computed from replay evidence.
+              </p>
+            )}
           </section>
 
           <section>

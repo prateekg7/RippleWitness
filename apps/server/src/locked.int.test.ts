@@ -26,6 +26,10 @@ describe("locked hosted run", () => {
     const config = await request(app).get("/api/config");
     expect(config.status).toBe(200);
     expect((config.body as { lockedRun: { repoPath: string } }).lockedRun.repoPath).toBe("/locked/repo");
+    expect((config.body as { capabilities: { llm: boolean; agentSession: string } }).capabilities).toEqual({
+      llm: false,
+      agentSession: "stub",
+    });
     const started = await request(app)
       .post("/api/analyze")
       .send({ repoPath: "/elsewhere", baseRef: "x", headRef: "y", scenariosDir: "/elsewhere/scenarios" });
