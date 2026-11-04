@@ -43,17 +43,28 @@ Status: **ready** · mode: full · assurance: **L3**
 
 | route | status | exercised | static | surprise |
 | --- | --- | --- | --- | --- |
-| route:GET /comments | QUIET | yes | no | no |
-| route:GET /definitely-missing | SURPRISE | yes | no | yes |
-| route:GET /health | QUIET | yes | no | no |
-| route:GET /posts | QUIET | yes | no | no |
-| route:GET /posts/:id | QUIET | yes | no | no |
+| route:DELETE /:name/:id | UNVERIFIED | no | yes | no |
+| route:GET /comments | CLEARED | yes | yes | no |
+| route:GET /definitely-missing | CONFIRMED | yes | yes | no |
+| route:GET /health | CLEARED | yes | yes | no |
+| route:GET /posts | CLEARED | yes | yes | no |
+| route:GET /posts/:id | CLEARED | yes | yes | no |
+| route:PATCH /:name | UNVERIFIED | no | yes | no |
+| route:PATCH /:name/:id | UNVERIFIED | no | yes | no |
+| route:POST /:name | UNVERIFIED | no | yes | no |
+| route:PUT /:name | UNVERIFIED | no | yes | no |
+| route:PUT /:name/:id | UNVERIFIED | no | yes | no |
 
 ### Unverified
 
-None — every fused route was exercised.
+- `route:DELETE /:name/:id`
+- `route:PATCH /:name`
+- `route:PATCH /:name/:id`
+- `route:POST /:name`
+- `route:PUT /:name`
+- `route:PUT /:name/:id`
 
-`RippleWitness-Receipt: ed25519:84c6fc8a44392114:380eab073aa4`
+`RippleWitness-Receipt: ed25519:1e73db159df35971:81d41a561cff`
 
 ## Quickstart
 

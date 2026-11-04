@@ -297,7 +297,9 @@ export function extractStaticGraph(rootDirInput: string, opts: ExtractOptions = 
       const method = pa.getName().toUpperCase();
       if (!ROUTE_METHODS.has(pa.getName())) continue;
       const rawPath = stringArg(call, 0);
-      if (rawPath === null) continue;
+      // A registration needs a path and a handler: one-arg lookups like
+      // URLSearchParams.get("_where") or settings reads are not routes.
+      if (rawPath === null || !rawPath.startsWith("/") || call.getArguments().length < 2) continue;
       const objName = pa.getExpression().getText();
       const prefix = routerPrefix.get(`${relOf(file)}:${objName}`) ?? "";
       const routeId = `route:${method} ${prefix}${rawPath}`;
@@ -318,6 +320,49 @@ export function extractStaticGraph(rootDirInput: string, opts: ExtractOptions = 
         addEdge(routeId, hid, "calls", "EXTRACTED");
         // Named handler references resolve to their declarations; inline bodies scan directly.
         if (handler.getKind() === SyntaxKind.Identifier) {
+          const resolved = resolveFunction(allFiles, file, name);
+          if (resolved) scanFunctionBody(hid, resolved.node, resolved.file, 1);
+        } else {
+          scanFunctionBody(hid, handler, file, 1);
+        }
+      });
+    }
+  }
+
+  // Pass 1b: path-mounted middleware/fallback handlers (app.use('/p', fn)).
+  // Routes under the mount prefix fall through to these handlers (Express /
+  // tinyhttp chains call next()), so each matching route links to the
+  // handler; a diff inside it then impacts those routes. Router mounts are
+  // already modeled via routerPrefix and are skipped here.
+  const routePathOf = (routeId: string): string[] => (routeId.split(" ")[1] ?? "").split("/");
+  const underPrefix = (routeId: string, mountPath: string): boolean => {
+    if (mountPath === "/") return true;
+    const mount = mountPath.split("/");
+    const segs = routePathOf(routeId);
+    if (mount.length > segs.length) return false;
+    return mount.every((seg, i) => (seg.startsWith(":") && (segs[i] as string).length > 0) || seg === segs[i] || (segs[i] as string).startsWith(":"));
+  };
+  for (const file of allFiles) {
+    const fileRoutes = [...nodes.values()].filter((n) => n.kind === "route" && n.file === relOf(file));
+    if (fileRoutes.length === 0) continue;
+    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expr = call.getExpression();
+      if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) continue;
+      const pa = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+      if (pa.getName() !== "use") continue;
+      const mountPath = stringArg(call, 0);
+      if (mountPath === null || !mountPath.startsWith("/")) continue;
+      call.getArguments().slice(1).forEach((handler, i) => {
+        const kind = handler.getKind();
+        if (kind !== SyntaxKind.ArrowFunction && kind !== SyntaxKind.FunctionExpression && kind !== SyntaxKind.Identifier) return;
+        if (kind === SyntaxKind.Identifier && (routerVars.get(file)?.has(handler.getText()) ?? false)) return;
+        const name = kind === SyntaxKind.Identifier ? handler.getText() : `use ${mountPath}#h${i}`;
+        const hid = `handler:${relOf(file)}:${name}`;
+        addNode({ id: hid, kind: "handler", label: name, file: relOf(file), range: rangeOf(handler) });
+        for (const route of fileRoutes) {
+          if (underPrefix(route.id, mountPath)) addEdge(route.id, hid, "calls", "EXTRACTED");
+        }
+        if (kind === SyntaxKind.Identifier) {
           const resolved = resolveFunction(allFiles, file, name);
           if (resolved) scanFunctionBody(hid, resolved.node, resolved.file, 1);
         } else {

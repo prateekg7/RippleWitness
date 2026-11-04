@@ -5,7 +5,7 @@ import { computeImpact, detectLanguage } from "@ripplewitness/graph";
 import type { ChangedFile } from "@ripplewitness/graph";
 import { extractStaticGraph } from "@ripplewitness/graph";
 import { aggregateByRoute, detectVolatile, diffSteps, learnMasks, loadScenarios, runReplay } from "@ripplewitness/replay";
-import { fuseRoutes } from "@ripplewitness/core";
+import { fuseRoutes, inheritStaticImpact, routePatternMatches } from "@ripplewitness/core";
 import type { ClaimEvidence, FusedNode, RouteEvidence } from "@ripplewitness/core";
 import { buildQuestions } from "@ripplewitness/crossexam";
 import { createLogger } from "./log.js";
@@ -155,9 +155,10 @@ export async function runAnalysis(
         }
         putArtifact(db, runId, "graph", graph); // F-16 maps impact paths back to files
         const routeCount = graph.nodes.filter((n) => n.kind === "route").length;
-        // J-05: a python static pass that finds zero routes is not a failure —
-        // the review runs dynamic-only (inventory from scenarios + __routes).
-        dynamicOnly = language === "python" && routeCount === 0;
+        // J-05, generalized: a static pass that finds zero routes in ANY
+        // language is not a failure — the review runs dynamic-only
+        // (inventory from scenarios + __routes), with no SURPRISE labels.
+        dynamicOnly = routeCount === 0;
         putArtifact(db, runId, "reviewMode", dynamicOnly ? "dynamic-only" : "full");
         const { hashArtifactFiles, tierForReviewMode } = await import("./receipts.js");
         putArtifact(db, runId, "assuranceTier", tierForReviewMode(dynamicOnly ? "dynamic-only" : "full"));
@@ -243,28 +244,40 @@ export async function runAnalysis(
     const routeDiffs = aggregateByRoute(stepDiffs, scenarioRoutes);
 
     // Stage fusion.
-    const routeIds = new Set<string>([
+    const allRouteIds = new Set<string>([
       ...routeDiffs.map((r) => r.routeId),
       ...(impact?.staticImpacted.filter((id) => id.startsWith("route:")) ?? []),
       ...replay.base.routes,
       ...replay.head.routes,
     ]);
-    const staticSet = new Set(impact?.staticImpacted ?? []);
-    const inDiffSet = new Set(impact?.inDiff ?? []);
+    // A static pattern (GET /:name) that an exercised concrete route already
+    // represents must not surface as its own node; the concrete route
+    // inherits its impact below. Unexercised patterns stay (UNVERIFIED).
+    const exercisedIds = routeDiffs.map((r) => r.routeId);
+    const routeIds = [...allRouteIds].filter(
+      (id) =>
+        exercisedIds.includes(id) || !exercisedIds.some((ex) => routePatternMatches(id, ex)),
+    );
     const headRouteSet = new Set((graph?.nodes ?? []).filter((n) => n.kind === "route").map((n) => n.id));
     const baseRoutes = getArtifact<string[] | null>(db, runId, "baseRoutes");
     const baseRouteSet = baseRoutes ? new Set(baseRoutes) : null;
+    const impactSets = {
+      staticImpacted: impact?.staticImpacted ?? [],
+      inDiff: impact?.inDiff ?? [],
+      paths: impact?.paths ?? {},
+    };
     const evidence: RouteEvidence[] = [...routeIds].sort().map((routeId) => {
       const rd = routeDiffs.find((r) => r.routeId === routeId);
+      const inherited = inheritStaticImpact(routeId, impactSets);
       return {
         routeId,
         exercised: rd !== undefined,
         observedChanged: rd?.changed ?? false,
-        staticImpacted: staticSet.has(routeId),
-        inDiff: inDiffSet.has(routeId),
+        staticImpacted: inherited.staticImpacted,
+        inDiff: inherited.inDiff,
         // New route: present in the head graph, absent from the base graph.
         isNew: baseRouteSet !== null && headRouteSet.has(routeId) && !baseRouteSet.has(routeId),
-        impactPath: impact?.paths[routeId] ?? [],
+        impactPath: inherited.impactPath,
       };
     });
     const claims: ClaimEvidence[] = [];

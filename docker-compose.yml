@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    image: ripplewitness-hosted
+    ports:
+      # Web UI (proxies /api to the server on 4400 inside the container).
+      - "5173:5173"
+    environment:
+      # Locked hosted demo: every analyze is forced to this subject.
+      # Paths are inside the container; see docs/HOSTING.md.
+      RIPPLEWITNESS_LOCKED_RUN: '{"repoPath":"/subject/json-server","baseRef":"rw-base","headRef":"rw-head","scenariosDir":"/app/docs/real-repo/scenarios","seedDbRel":"seed/seed.db","appStart":["node","--experimental-strip-types","src/bin.ts","rw-db.json"]}'
+      # Optional LLM features (your key, your credits; per-run cap applies).
+      META_API_KEY: ${META_API_KEY:-}
+      RIPPLEWITNESS_HOME: /data
+    volumes:
+      # Runs DB, receipts signing keys, response cache. Delete to reset.
+      - rw-data:/data
+    restart: unless-stopped
+
+volumes:
+  rw-data:

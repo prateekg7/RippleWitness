@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { envText } from "./env.js";
 
 const execFileP = promisify(execFile);
 
@@ -62,7 +63,7 @@ export class ExecSession implements AgentSessionPort {
   private readonly timeoutMs: number;
   private readonly home: string | undefined;
   constructor(opts: ExecOptions = {}) {
-    this.binary = opts.binary ?? process.env.MUSE_BINARY_PATH ?? "muse";
+    this.binary = opts.binary ?? envText(process.env.MUSE_BINARY_PATH) ?? "muse";
     this.provider = opts.provider ?? "meta";
     this.timeoutMs = opts.timeoutMs ?? 120000;
     this.home = opts.home;

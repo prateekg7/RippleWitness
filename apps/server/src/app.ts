@@ -55,9 +55,22 @@ function canonicalPrediction(p: unknown): { routeIds: string[]; nothingElse: boo
 }
 const OverrideSchema = z.object({ reason: z.string().min(1).max(500) });
 
+export interface LockedRunConfig {
+  repoPath: string;
+  baseRef: string;
+  headRef: string;
+  scenariosDir: string;
+  seedDbRel?: string;
+  appStart?: string[];
+  appDir?: string;
+  language?: "node" | "python" | "go";
+}
+
 export interface ServerOptions {
   workRoot: string;
   home: string;
+  /** Hosted-demo lock: forces these subject fields on every analyze; client-supplied values are ignored. */
+  lockedRun?: LockedRunConfig;
   gate?: { minRecall: number; minPrecision: number };
   session?: AgentSessionPort;
   /** Claim extraction hook (LLM in prod, stub in tests). Absent => 503 no_llm. */
@@ -95,14 +108,57 @@ function verifierEvidence(db: Database.Database, runId: string): {
   };
 }
 
+/** Hosted-demo abuse limits (locked mode only; local use is unlimited). */
+export const HOSTED_API_PER_5MIN = 600;
+export const HOSTED_ANALYZE_PER_HOUR = 6;
+export const HOSTED_MAX_CONCURRENT = 2;
+
+function fixedWindow(windowMs: number, max: number) {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+  return (req: Request, res: Response, next: () => void): void => {
+    const now = Date.now();
+    const key = req.ip ?? "unknown";
+    const cur = hits.get(key);
+    if (!cur || cur.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      next();
+      return;
+    }
+    cur.count += 1;
+    if (cur.count > max) {
+      res.status(429).json({ error: "rate_limited" });
+      return;
+    }
+    next();
+  };
+}
+
 export function createServer(db: Database.Database, opts: ServerOptions): Express {
   const app = express();
+  app.disable("x-powered-by");
   app.use(express.json({ limit: "1mb" }));
   const serverGate = opts.gate;
+  let activeAnalyses = 0;
+  if (opts.lockedRun) {
+    // Behind the hosting proxy the client IP arrives via X-Forwarded-For.
+    app.set("trust proxy", 1);
+    app.use("/api", fixedWindow(5 * 60_000, HOSTED_API_PER_5MIN));
+  }
 
   app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-  app.post("/api/analyze", (req: Request, res: Response) => {
+  app.get("/api/config", (_req: Request, res: Response) => res.json({ lockedRun: opts.lockedRun ?? null }));
+
+  app.get("/api/runs", (_req: Request, res: Response) => {
+    const rows = db.prepare("SELECT id, status, createdAt FROM runs ORDER BY createdAt DESC LIMIT 20").all();
+    return res.json({ runs: rows });
+  });
+
+  const analyzeHourly = opts.lockedRun
+    ? fixedWindow(60 * 60_000, HOSTED_ANALYZE_PER_HOUR)
+    : (_req: Request, _res: Response, next: () => void): void => next();
+
+  app.post("/api/analyze", analyzeHourly, (req: Request, res: Response) => {
     const parsed = AnalyzeSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
     // The schema checks shapes; integrity (dangling edges, duplicate ids) is checked here.
@@ -110,20 +166,40 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
     if (external && !external.ok) return res.status(400).json({ error: "invalid_input" });
     const runId = randomUUID();
     if (parsed.data.gate) putArtifact(db, runId, "gate", parsed.data.gate);
+    const locked = opts.lockedRun;
     const input: AnalyzeInput = {
-      repoPath: parsed.data.repoPath,
-      baseRef: parsed.data.baseRef,
-      headRef: parsed.data.headRef,
-      scenariosDir: parsed.data.scenariosDir,
-      ...(parsed.data.appDir ? { appDir: parsed.data.appDir } : {}),
-      ...(parsed.data.seedDbRel ? { seedDbRel: parsed.data.seedDbRel } : {}),
+      repoPath: locked?.repoPath ?? parsed.data.repoPath,
+      baseRef: locked?.baseRef ?? parsed.data.baseRef,
+      headRef: locked?.headRef ?? parsed.data.headRef,
+      scenariosDir: locked?.scenariosDir ?? parsed.data.scenariosDir,
+      ...(locked
+        ? {
+            ...(locked.appDir ? { appDir: locked.appDir } : {}),
+            ...(locked.seedDbRel ? { seedDbRel: locked.seedDbRel } : {}),
+            ...(locked.language ? { language: locked.language } : {}),
+            ...(locked.appStart ? { appStart: locked.appStart } : {}),
+          }
+        : {
+            ...(parsed.data.appDir ? { appDir: parsed.data.appDir } : {}),
+            ...(parsed.data.seedDbRel ? { seedDbRel: parsed.data.seedDbRel } : {}),
+            ...(parsed.data.language ? { language: parsed.data.language } : {}),
+            ...(parsed.data.appStart ? { appStart: parsed.data.appStart } : {}),
+            ...(parsed.data.artifacts ? { artifacts: parsed.data.artifacts } : {}),
+          }),
       ...(parsed.data.flakeGuard === undefined ? {} : { flakeGuard: parsed.data.flakeGuard }),
-      ...(parsed.data.language ? { language: parsed.data.language } : {}),
-      ...(parsed.data.appStart ? { appStart: parsed.data.appStart } : {}),
-      ...(parsed.data.artifacts ? { artifacts: parsed.data.artifacts } : {}),
-      ...(external && external.ok ? { externalGraph: external.graph } : {}),
+      ...(external && external.ok && !locked ? { externalGraph: external.graph } : {}),
     };
-    void runAnalysis(db, opts.workRoot, input, runId);
+    if (locked && activeAnalyses >= HOSTED_MAX_CONCURRENT) {
+      return res.status(429).json({ error: "busy" });
+    }
+    if (locked) {
+      activeAnalyses += 1;
+      void runAnalysis(db, opts.workRoot, input, runId).finally(() => {
+        activeAnalyses -= 1;
+      });
+    } else {
+      void runAnalysis(db, opts.workRoot, input, runId);
+    }
     return res.status(202).json({ runId });
   });
 

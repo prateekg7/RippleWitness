@@ -3,6 +3,7 @@ export type { AgentAnswer, AgentMode, AgentSessionPort, ExecOptions, TranscriptT
 export { ExecSession, MockSession, findLatestSessionJsonl, loadTranscript, parseExecJsonl } from "./session.js";
 export { treeFingerprint, treeUnchanged } from "./readonly.js";
 export { redactSecrets } from "./redactor.js";
+export { envText } from "./env.js";
 export { cacheKey, FileCache, resolveCacheDir } from "./cache.js";
 export {
   DEFAULT_BASE_URL,
@@ -17,9 +18,11 @@ export {
   MetaDegraded,
   USER_CONTENT_CHAR_LIMIT,
   clearRunClients,
+  fallbackChainLabels,
   metaClientForRun,
+  parseFallbackEnv,
 } from "./meta.js";
-export type { MetaCallContext, MetaMetrics, MetaOptions } from "./meta.js";
+export type { MetaCallContext, MetaFallbackOptions, MetaMetrics, MetaOptions } from "./meta.js";
 export type { PhraserTone } from "./phraser.js";
 export { phraseQuestion } from "./phraser.js";
 export type { CanaryPlan, PlanHunk } from "./canary-planner.js";

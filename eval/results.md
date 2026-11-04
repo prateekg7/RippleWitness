@@ -1,6 +1,6 @@
 # RippleWitness eval results
 
-Generated: 2026-11-03T14:42:12.205Z by `pnpm eval` (eval/run.ts). Tree: uncommitted working tree.
+Generated: 2026-11-04T11:03:59.936Z by `pnpm eval` (eval/run.ts). Tree: uncommitted working tree.
 Scenarios: 42. No LLM calls in this harness (deterministic path only).
 
 ## E1 — differential replay vs designed labels
@@ -76,4 +76,4 @@ Single-subject-per-language: an existence replication, not a language benchmark.
 
 CPU-only toy models: an existence proof for ML subjects, not an accuracy benchmark.
 
-Harness wall time: 250s.
+Harness wall time: 254s.

@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { envText } from "@ripplewitness/agents";
 import { runDoctor } from "./doctor.js";
 
 const cmd = process.argv[2] ?? "help";
-const home = process.env.RIPPLEWITNESS_HOME ?? join(process.cwd(), ".ripplewitness");
+const home = envText(process.env.RIPPLEWITNESS_HOME) ?? join(process.cwd(), ".ripplewitness");
 
 function flag(name: string): string | undefined {
   const i = process.argv.indexOf(name);

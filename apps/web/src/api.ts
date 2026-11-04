@@ -1,3 +1,12 @@
+export interface LockedRun {
+  repoPath: string;
+  baseRef: string;
+  headRef: string;
+  scenariosDir: string;
+  seedDbRel?: string;
+  appStart?: string[];
+}
+
 export interface MapNode {
   routeId: string;
   staticImpacted: boolean;
@@ -45,6 +54,8 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  config: () => fetch("/api/config").then(j<{ lockedRun: LockedRun | null }>),
+  runs: () => fetch("/api/runs").then(j<{ runs: { id: string; status: string; createdAt: string }[] }>),
   analyze: (body: object) =>
     fetch("/api/analyze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(
       j<{ runId: string }>,
@@ -153,6 +164,8 @@ export const api = {
           tokensOut: number;
           latencyMs: number;
           cacheHits: number;
+          fallbackCalls: number;
+          models: Record<string, number>;
           perAgent: Record<string, { calls: number; schemaValid: number; repairs: number }>;
         };
       }>,

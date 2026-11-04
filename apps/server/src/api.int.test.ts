@@ -433,6 +433,77 @@ ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()
     db.close();
   });
 
+  it("IT-GR-JS-04: node subject with no static routes runs DYNAMIC-ONLY", async () => {
+    const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-dynjs.db`));
+    const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wtdynjs-")), home: mkdtempSync(join(tmpdir(), "rw-srv-homedynjs-")) });
+    // Manual-dispatch node HTTP subject: no route registrations at all, so
+    // the static pass finds zero routes (the json-server failure shape).
+    const repoPath = mkdtempSync(join(tmpdir(), "rw-dynjs-"));
+    const git = (args: string[]): Promise<string> =>
+      exec("git", args, { cwd: repoPath }).then((r) => r.stdout.trim()) as Promise<string>;
+    await git(["init", "-q", "-b", "main", "."]);
+    await git(["config", "user.email", "t@local"]);
+    await git(["config", "user.name", "t"]);
+    writeFileSync(
+      join(repoPath, "server.js"),
+      `const http = require("node:http");
+const server = http.createServer((req, res) => {
+  const send = (status, obj) => {
+    const body = JSON.stringify(obj);
+    res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+  };
+  const p = req.url.split("?")[0];
+  if (p === "/health") return send(200, { ok: true });
+  if (p === "/ping") return send(200, { pong: true });
+  if (p === "/__routes") return send(200, { routes: ["route:GET /ping", "route:GET /v1/extra"] });
+  return send(404, { error: "not_found" });
+});
+server.listen(Number(process.env.PORT), "127.0.0.1");
+`,
+    );
+    const { default: Database } = await import("better-sqlite3");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(repoPath, "seed"), { recursive: true });
+    new Database(join(repoPath, "seed", "seed.db")).close();
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "base"]);
+    const base = await git(["rev-parse", "HEAD"]);
+    const scenariosDir = mkdtempSync(join(tmpdir(), "rw-dynjs-scen-"));
+    writeFileSync(
+      join(scenariosDir, "ping.json"),
+      JSON.stringify({ id: "ping", group: "g", routeIds: ["route:GET /ping"], steps: [{ method: "GET", path: "/ping" }] }),
+    );
+    const started = await request(app).post("/api/analyze").send({
+      repoPath,
+      baseRef: base,
+      headRef: base,
+      scenariosDir,
+      flakeGuard: false,
+      language: "node",
+      appStart: ["node", "server.js"],
+    });
+    expect(started.status).toBe(202);
+    const runId = (started.body as { runId: string }).runId;
+    let status = "";
+    for (let i = 0; i < 120; i++) {
+      const r = await request(app).get(`/api/runs/${runId}/status`);
+      status = (r.body as { status: string }).status;
+      if (status === "ready" || status === "static-only" || status === "failed") break;
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+    expect(status).toBe("ready");
+    const st = await request(app).get(`/api/runs/${runId}/status`);
+    expect((st.body as { reviewMode: string }).reviewMode).toBe("dynamic-only");
+    await request(app).post(`/api/runs/${runId}/predict`).send({ routeIds: [], nothingElse: true });
+    const reveal = await request(app).get(`/api/runs/${runId}/reveal`);
+    const nodes = (reveal.body as { nodes: { routeId: string; status: string }[] }).nodes;
+    expect(nodes.find((n) => n.routeId === "route:GET /ping")?.status).toBe("UNCHANGED");
+    expect(nodes.find((n) => n.routeId === "route:GET /v1/extra")?.status).toBe("UNCOVERED");
+    expect(nodes.some((n) => n.status === "SURPRISE")).toBe(false);
+    db.close();
+  });
+
   it("CT-HRV-E2E: harvest adopts the subject suite's deterministic calls", async () => {
     const db = openStore(join(tmpdir(), `rw-srv-${Date.now()}-hrv.db`));
     const app = createServer(db, { workRoot: mkdtempSync(join(tmpdir(), "rw-srv-wthrv-")), home: mkdtempSync(join(tmpdir(), "rw-srv-homehrv-")) });

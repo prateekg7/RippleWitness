@@ -52,6 +52,8 @@ describe("agent metrics endpoint (CT-AGE-04)", () => {
       const res = await request(setup()).get("/api/runs/r1/metrics");
       expect(res.status).toBe(200);
       expect(res.body.metrics.calls).toBe(0);
+      expect(res.body.metrics.fallbackCalls).toBe(0);
+      expect(res.body.metrics.models).toEqual({});
       expect(res.body.metrics.perAgent).toEqual({});
     } finally {
       if (prev === undefined) delete process.env.META_API_KEY;

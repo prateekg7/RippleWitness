@@ -1,0 +1,23 @@
+# Render Blueprint — one Docker web service running the locked
+# json-server demo (docs/HOSTING.md). Persistent disk keeps runs,
+# receipt signing keys, and the response cache across deploys.
+# Note: Render persistent disks need a paid instance type.
+services:
+  - type: web
+    name: ripplewitness-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    branch: main
+    healthCheckPath: /
+    envVars:
+      - key: RIPPLEWITNESS_LOCKED_RUN
+        value: '{"repoPath":"/subject/json-server","baseRef":"rw-base","headRef":"rw-head","scenariosDir":"/app/docs/real-repo/scenarios","seedDbRel":"seed/seed.db","appStart":["node","--experimental-strip-types","src/bin.ts","rw-db.json"]}'
+      - key: RIPPLEWITNESS_HOME
+        value: /data
+      # Entered in the Render dashboard at deploy time; never in git.
+      - key: META_API_KEY
+        sync: false
+    disk:
+      name: rw-data
+      mountPath: /data
+      sizeGB: 1

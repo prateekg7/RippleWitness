@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
+import { envText } from "@ripplewitness/agents";
 
 export interface RunRow {
   id: string;
@@ -18,7 +19,7 @@ export interface RunRow {
 
 export function openStore(dbPath?: string): Database.Database {
   const file =
-    dbPath ?? join(process.env.RIPPLEWITNESS_HOME ?? join(process.cwd(), ".ripplewitness"), "runs.db");
+    dbPath ?? join(envText(process.env.RIPPLEWITNESS_HOME) ?? join(process.cwd(), ".ripplewitness"), "runs.db");
   mkdirSync(dirname(file), { recursive: true });
   const db = new Database(file);
   db.exec(`
