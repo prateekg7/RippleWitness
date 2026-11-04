@@ -6,7 +6,8 @@
  *
  * Usage: corepack pnpm demo [patch]     (default patch: PR-00)
  */
-import { cpSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,9 +21,37 @@ function run(cmd, args, cwd) {
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
 }
 
-if (!existsSync(join(SHOP, "node_modules"))) {
-  console.error("demo/shop-api has no node_modules. Run `corepack pnpm i` first.");
+function die(msg) {
+  console.error(`\nripplewitness demo: ${msg}`);
   process.exit(1);
+}
+
+// Preflight: fail loudly and helpfully, never half-start.
+const major = Number(process.versions.node.split(".")[0]);
+if (!Number.isInteger(major) || major < 22) {
+  die(`Node >= 22 is required (found ${process.version}). Install Node 22, then rerun.`);
+}
+try {
+  execFileSync("git", ["--version"], { stdio: "ignore" });
+} catch {
+  die("git is required but was not found on PATH.");
+}
+function portFree(port) {
+  return new Promise((resolve) => {
+    const s = createServer();
+    s.once("error", () => resolve(false));
+    s.once("listening", () => s.close(() => resolve(true)));
+    s.listen(port, "127.0.0.1");
+  });
+}
+for (const port of [4400, 5173]) {
+  if (!(await portFree(port))) {
+    die(`port ${port} is already in use. Stop the other process, then rerun.`);
+  }
+}
+
+if (!existsSync(join(SHOP, "node_modules"))) {
+  die("demo/shop-api has no node_modules. Run `corepack pnpm i` first.");
 }
 
 console.log("Seeding demo database…");
@@ -30,6 +59,9 @@ run("corepack", ["pnpm", "demo:prepare"], ROOT);
 
 const subj = join(tmpdir(), `rw-demo-${patch.toLowerCase()}`);
 console.log(`Preparing hero subject in ${subj} …`);
+// Our own scratch dir from a previous run: rebuild from scratch so the
+// demo is re-runnable (a second run must not fail on the old git repo).
+rmSync(subj, { recursive: true, force: true });
 mkdirSync(subj, { recursive: true });
 cpSync(SHOP, subj, {
   recursive: true,

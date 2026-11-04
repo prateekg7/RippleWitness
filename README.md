@@ -28,9 +28,44 @@ receipt is bound to the exact diff.
 | Works on code we didn't write | Real upstream fix in `typicode/json-server`: predicted exactly the 404 change; gate 1.00/1.00; ed25519 receipt `VALID` in CI mode | [docs/real-repo-run.md](docs/real-repo-run.md) |
 | UNVERIFIED is a to-do, not a dead end | Forge loop synthesized `GET /products`, flipped UNVERIFIED → CONFIRMED live | [docs/forge-live-run.md](docs/forge-live-run.md) |
 
+What a finished review looks like — the verbatim report for the json-server
+run above (no installation needed to judge it):
+
+## RippleWitness report — `rw-base..rw-head`
+
+Status: **ready** · mode: full · assurance: **L3**
+
+### Gate
+
+**PASS** — recall 1.00, precision 1.00 (thresholds_met)
+
+### Observed blast radius
+
+| route | status | exercised | static | surprise |
+| --- | --- | --- | --- | --- |
+| route:GET /comments | QUIET | yes | no | no |
+| route:GET /definitely-missing | SURPRISE | yes | no | yes |
+| route:GET /health | QUIET | yes | no | no |
+| route:GET /posts | QUIET | yes | no | no |
+| route:GET /posts/:id | QUIET | yes | no | no |
+
+### Unverified
+
+None — every fused route was exercised.
+
+`RippleWitness-Receipt: ed25519:84c6fc8a44392114:380eab073aa4`
+
 ## Quickstart
 
-Prerequisites: Node 22+, git, and `corepack` (ships with Node).
+Prerequisites: **macOS or Linux**, Node 22+, git, and `corepack` (ships with
+Node). Windows is not supported (symlinked dependency trees and
+process-group teardown assume POSIX). The first `corepack pnpm i` needs
+network; after that, everything below runs locally.
+
+Reviewer config (optional): drop a `ripplewitness.config.yaml` in
+`$RIPPLEWITNESS_HOME` or the server's working directory to tune the gate
+thresholds, question tone, explainer length, and summary style — every key
+is consumed, and unknown keys fail fast at startup.
 
 ```sh
 corepack pnpm i
