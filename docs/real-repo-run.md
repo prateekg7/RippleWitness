@@ -109,6 +109,18 @@ receipts bound the ref *spelling*; receipts now bind resolved SHAs
 (`resolveRef` in `apps/server/src/receipts.ts`, regression-tested). That
 bug was found by this run, not by the test suite.
 
+## Evidence summary (what exists, labeled by kind)
+
+| Run | Subject | Kind | Outcome |
+|---|---|---|---|
+| json-server `8d42c40` (this page) | third-party, upstream fix | live, human prediction locked pre-reveal | gate 1.00/1.00; receipt `VALID tier:L3` in CI mode |
+| Python subject (IT-REP-11/12 + E6) | our fixtures (`demo/shop-api-py`) | committed integration suite + `pnpm eval` | observed changes match designed labels; deterministic |
+| Go subject (IT-REP-GO-01) | our fixtures (`demo/shop-api-go`) | committed integration suite | PR-GO-00 ripple on cart + reports; health unchanged |
+| JS subject (IT-GR-JS, IT-REP-12) | our fixtures (`demo/shop-api-js`) | committed integration suite | same 12 routes as TS; deterministic |
+
+Only the first row is third-party code; the rest prove the polyglot
+pipeline end-to-end on fixtures we control. We do not claim otherwise.
+
 ## Honest limitations this run exposed
 
 - **Static blindness is real.** json-server registers routes from db keys
