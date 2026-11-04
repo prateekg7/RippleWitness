@@ -49,6 +49,15 @@ describe("meta transport hardening (CT-AGE-03)", () => {
     expect(c.getMetrics().transportRetries).toBe(1);
   });
 
+  it("unwraps a double-encoded JSON string answer", async () => {
+    const { fetchImpl } = seq([
+      { ok: true, content: JSON.stringify(JSON.stringify({ answer: "yes" })) },
+    ]);
+    const c = new MetaClient({ apiKey: "t", fetchImpl });
+    await expect(c.completeJson("s", "u", schema)).resolves.toEqual({ answer: "yes" });
+    expect(c.getMetrics().schemaRepairs).toBe(0);
+  });
+
   it("gives up after maxRetries on persistent 429", async () => {
     let n = 0;
     const c = new MetaClient({

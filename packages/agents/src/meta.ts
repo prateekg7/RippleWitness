@@ -447,7 +447,7 @@ function envNum(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function tryJson(text: string): unknown {
+function parseLoose(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
@@ -461,4 +461,15 @@ function tryJson(text: string): unknown {
     }
     return text;
   }
+}
+
+function tryJson(text: string): unknown {
+  // Some models return the JSON object double-encoded (a JSON string whose
+  // contents are the object). Unwrap up to two string layers before zod
+  // validation so a well-formed answer is not discarded as a type error.
+  let cur: unknown = parseLoose(text);
+  for (let i = 0; i < 2 && typeof cur === "string"; i += 1) {
+    cur = parseLoose(cur);
+  }
+  return cur;
 }

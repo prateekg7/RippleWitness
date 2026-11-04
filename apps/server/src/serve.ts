@@ -83,7 +83,10 @@ export function start(port = Number(envText(process.env.RIPPLEWITNESS_PORT) ?? 4
     // `muse` binary surfaces as 503 agent_unavailable, never a fake answer.
     // RIPPLEWITNESS_AGENT_SESSION=stub swaps in the scripted session for
     // tests/offline demos (answers label themselves reinstantiated).
-    session: process.env.RIPPLEWITNESS_AGENT_SESSION === "stub" ? new MockSession() : new ExecSession(),
+    session:
+      process.env.RIPPLEWITNESS_AGENT_SESSION === "stub"
+        ? new MockSession(["not verified — hosted demo stub: no live agent session is attached, so this demonstrates the ask/re-verify loop only."])
+        : new ExecSession(),
     gate: cfg.gate,
     agentDefaults: { explainerMaxSentences: cfg.explainerMaxSentences, summaryStyle: cfg.summaryStyle },
     ...buildLlmOptions(key, { tone: cfg.tone }),

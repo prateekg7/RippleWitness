@@ -22,6 +22,7 @@ export async function validateCanary(opts: {
   scenariosDir: string;
   seedDbRel: string;
   appDir?: string;
+  appStart?: string[];
   workRoot: string;
 }): Promise<CanaryVerdict> {
   const branch = `rw-canary-${Date.now()}`;
@@ -32,9 +33,11 @@ export async function validateCanary(opts: {
     writeFileSync(target, opts.candidate.patched);
     await execa("git", ["checkout", "-qb", branch], { cwd: setupWt });
     await execa("git", ["add", "-A"], { cwd: setupWt });
-    await execa("git", ["commit", "-qm", `canary ${opts.candidate.operator} ${opts.candidate.file}:${opts.candidate.line}`], {
-      cwd: setupWt,
-    });
+    await execa(
+      "git",
+      ["-c", "user.name=RippleWitness", "-c", "user.email=ripplewitness@localhost", "commit", "-qm", `canary ${opts.candidate.operator} ${opts.candidate.file}:${opts.candidate.line}`],
+      { cwd: setupWt },
+    );
   } catch (err) {
     await removeWorktree(opts.repoPath, setupWt).catch(() => {});
     return { accepted: false, reason: `canary commit failed: ${String(err)}`, changedRoutes: [] };
@@ -47,6 +50,7 @@ export async function validateCanary(opts: {
       scenariosDir: opts.scenariosDir,
       seedDbRel: opts.seedDbRel,
       ...(opts.appDir ? { appDir: opts.appDir } : {}),
+      ...(opts.appStart ? { appStart: opts.appStart } : {}),
       workRoot: join(opts.workRoot, "wt-canary-run"),
     });
     if (!replay.ok) {

@@ -22,6 +22,10 @@ describe("canary validation (E-04 live)", () => {
     await execa("git", ["add", "-A"], { cwd: repoPath });
     await execa("git", ["commit", "-qm", "base"], { cwd: repoPath });
     const base = (await execa("git", ["rev-parse", "HEAD"], { cwd: repoPath })).stdout.trim();
+    // Hosted subjects have no stored git identity; canary validation must
+    // carry its own identity for the temp commit instead of failing.
+    await execa("git", ["config", "--unset", "user.email"], { cwd: repoPath });
+    await execa("git", ["config", "--unset", "user.name"], { cwd: repoPath });
     const { symlinkSync } = await import("node:fs");
     symlinkSync(join(ROOT, "demo", "shop-api", "node_modules"), join(repoPath, "node_modules"), "dir");
 

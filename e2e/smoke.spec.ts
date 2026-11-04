@@ -20,12 +20,38 @@ test("E2E-01 happy path: analyze → predict → lock → reveal → ask → rec
   await page.getByRole("button", { name: "Lock prediction" }).click();
   await expect(page.getByRole("heading", { name: "Gate score" })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText(/recall 1\.00/)).toBeVisible();
-  // Cross-exam via the mock session (NO-LLM: records ASKED).
+  // Receipt.
+  await page.getByRole("button", { name: "Issue receipt" }).click();
+  await expect(page.getByText(/RippleWitness-Receipt:/)).toBeVisible({ timeout: 30000 });
+});
+
+test("E2E-01b missed prediction generates a question; ask parks it, override unblocks receipt", async ({ page }) => {
+  const s = await buildSubject();
+  const runId = await analyze(API, s, { appStart: ["node", "server.js"], flakeGuard: false });
+  await waitStatus(API, runId, ["ready"]);
+  await page.goto(`/#/runs/${runId}`);
+  await expect(page.getByText("route:GET /value")).toBeVisible({ timeout: 60000 });
+  // Predict nothing: the changed route becomes a MISSED_PREDICTION question.
+  await page.getByRole("button", { name: "Lock prediction" }).click();
+  await expect(page.getByRole("heading", { name: "Gate score", exact: true })).toBeVisible({ timeout: 30000 });
   const askButtons = page.getByRole("button", { name: "Ask agent" });
   expect(await askButtons.count()).toBeGreaterThan(0);
   await askButtons.first().click();
   await expect(page.getByText("(ASKED)")).toBeVisible({ timeout: 30000 });
-  // Receipt.
+  await expect(page.getByText(/hosted demo stub|re-instantiated/)).toBeVisible();
+  // Blind-first: the human finding records, AI review unlocks, and the
+  // NO-LLM deployment says so plainly instead of failing silently.
+  await page.getByPlaceholder("file, e.g. src/app.ts").fill("helper.js");
+  await page.getByPlaceholder("start line, e.g. 40").fill("1");
+  await page.getByPlaceholder("end line, e.g. 44").fill("1");
+  await page.getByPlaceholder(/your finding/).fill("value changed from base to head");
+  await page.getByRole("button", { name: "Submit finding" }).click();
+  await expect(page.getByText(/Your finding is recorded/)).toBeVisible({ timeout: 30000 });
+  await page.getByRole("button", { name: "Run AI review" }).click();
+  await expect(page.getByText(/Unavailable on this deployment: no Meta model is configured/)).toBeVisible({ timeout: 30000 });
+  // A failed gate blocks the receipt until a reasoned override is recorded.
+  await page.getByPlaceholder("Override reason (recorded)").fill("E2E: miss acknowledged");
+  await page.getByRole("button", { name: "Override with reason" }).click();
   await page.getByRole("button", { name: "Issue receipt" }).click();
   await expect(page.getByText(/RippleWitness-Receipt:/)).toBeVisible({ timeout: 30000 });
 });

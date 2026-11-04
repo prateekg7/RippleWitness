@@ -61,6 +61,30 @@ describe("receipt (E-03)", () => {
     expect(back).not.toBeNull();
     expect(verifyReceipt(JSON.parse(back as string), key)).toEqual({ ok: true });
   });
+  it("CT-RC-04b: git note roundtrip with no configured git identity", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rw-note-noident-"));
+    await execFileP("git", ["init", "-q", "-b", "main", "."], { cwd: dir });
+    // Initial commit carries its identity per-invocation; nothing is stored
+    // in repo or global config for writeNote to lean on.
+    await execFileP("git", ["-c", "user.email=t@l", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: dir });
+    const key = loadOrCreateKey(mkdtempSync(join(tmpdir(), "rw-key-")));
+    const r = signReceipt(payload(), key);
+    const prev = { HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME, GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM };
+    process.env.HOME = mkdtempSync(join(tmpdir(), "rw-empty-home-"));
+    process.env.XDG_CONFIG_HOME = process.env.HOME;
+    process.env.GIT_CONFIG_NOSYSTEM = "1";
+    try {
+      await writeNote(dir, "HEAD", JSON.stringify(r));
+      const back = await readNote(dir, "HEAD");
+      expect(back).not.toBeNull();
+      expect(verifyReceipt(JSON.parse(back as string), key)).toEqual({ ok: true });
+    } finally {
+      for (const [k, v] of Object.entries(prev)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
   it("key file is created, not logged", () => {
     const home = mkdtempSync(join(tmpdir(), "rw-key-"));
     const k1 = loadOrCreateKey(home);

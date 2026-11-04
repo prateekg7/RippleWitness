@@ -139,6 +139,13 @@ export async function issueReceipt(
       ? signReceiptEd(payload, loadOrCreateSignKey(home).privateKeyPem)
       : signReceipt(payload, loadOrCreateKey(home));
   putArtifact(db, runId, "receipt", receipt);
-  await writeNote(run.repoPath, run.headRef, JSON.stringify(receipt));
+  // The signed receipt stored above is the primary artifact; the git note is
+  // a portability extra. A note failure (read-only subject, locked refs)
+  // must never fail issuance or take the server down with it.
+  try {
+    await writeNote(run.repoPath, run.headRef, JSON.stringify(receipt));
+  } catch {
+    /* best-effort git note; receipt remains retrievable via GET /receipt */
+  }
   return { ok: true, receipt };
 }

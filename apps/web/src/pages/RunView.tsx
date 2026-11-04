@@ -14,6 +14,38 @@ const STATUS_GLYPH: Record<string, string> = {
   DIFF: "≠",
 };
 
+/** Turn API error codes into judge-readable guidance instead of raw HTTP JSON. */
+function friendlyError(err: unknown): string {
+  const raw = String(err);
+  if (raw.includes("gate_not_passed")) return "Receipt blocked: the prediction gate has not passed. Record an override reason under Gate score, then issue the receipt.";
+  if (raw.includes("prediction_locked_required")) return "Lock your prediction first — this unlocks after the gate.";
+  if (raw.includes("human_findings_required_first")) return "Submit your own finding first — AI review unlocks only after that (blind-first).";
+  if (raw.includes("no_llm")) return "Unavailable on this deployment: no Meta model is configured (META_API_KEY missing). Your input above is still recorded; the deterministic review continues without it.";
+  if (raw.includes("agent_unavailable")) return "No live agent answered. Locally, make sure the muse CLI is on PATH; the hosted demo answers through a labeled stub instead.";
+  if (raw.includes("rate_limited")) return "Rate limit reached on this hosted demo. Wait a few minutes and try again.";
+  if (raw.includes("file_not_in_head")) return "That file is not in the head version of this change. Pick a file shown in the Diff above.";
+  if (raw.includes("no_mutation_applies")) return "No canary mutation applies to that file. Try another changed file from the Diff.";
+  if (raw.includes("question_quota_exhausted")) return "Question quota for this review is used up (5 asked questions).";
+  return raw.replace(/^Error: /, "");
+}
+
+/** Answers are stored as JSON ({text, mode, followup}); render them readably. */
+function formatAnswer(answer: string): string {
+  try {
+    const parsed = JSON.parse(answer) as { text?: string; mode?: string; followup?: string | null };
+    if (typeof parsed.text !== "string") return answer;
+    const modeLabel =
+      parsed.mode === "live_session"
+        ? "live agent session"
+        : parsed.mode === "reinstantiated_from_transcript"
+          ? "re-instantiated from transcript / demo stub"
+          : parsed.mode ?? "agent";
+    return `A (${modeLabel}): ${parsed.text}${parsed.followup ? `\n${parsed.followup}` : ""}`;
+  } catch {
+    return `A: ${answer}`;
+  }
+}
+
 function StatusPill(props: { status: string }): React.JSX.Element {
   const glyph = STATUS_GLYPH[props.status] ?? "▪";
   return (
@@ -34,26 +66,62 @@ function StatusLegend(): React.JSX.Element {
 }
 
 function AssistantsBox(props: { runId: string }): React.JSX.Element {
+  const [file, setFile] = useState("");
+  const [startLine, setStartLine] = useState("");
+  const [endLine, setEndLine] = useState("");
   const [note, setNote] = useState("");
+  const [recorded, setRecorded] = useState(false);
+  const [busyAi, setBusyAi] = useState(false);
   const [out, setOut] = useState("");
+  const [aiOut, setAiOut] = useState<string[]>([]);
   return (
     <div>
-      <p className="muted">Submit your own finding first — AI review unlocks after.</p>
-      <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="file:start-end note (e.g. src/app.ts:40-44 check rounding)" />
+      <p className="muted">Step 1: record your own finding (file and line range from the Diff, plus what to check). Step 2: only then run AI review, so its findings cannot anchor yours.</p>
+      <input type="text" value={file} onChange={(e) => setFile(e.target.value)} placeholder="file, e.g. src/app.ts" />
+      <input type="text" value={startLine} onChange={(e) => setStartLine(e.target.value)} placeholder="start line, e.g. 40" inputMode="numeric" />
+      <input type="text" value={endLine} onChange={(e) => setEndLine(e.target.value)} placeholder="end line, e.g. 44" inputMode="numeric" />
+      <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="your finding, e.g. check the 404 response shape" />
       <button
         onClick={() => {
-          const m = /^(\S+):(\d+)-(\d+)\s+(.+)$/.exec(note);
-          if (!m) { setOut("format: file:start-end note"); return; }
-          void api.findings(props.runId, [{ file: m[1] as string, startLine: Number(m[2]), endLine: Number(m[3]), note: m[4] as string }])
-            .then((r) => setOut(`recorded ${r.recorded}`)).catch((e: unknown) => setOut(String(e)));
+          const start = Number(startLine);
+          const end = Number(endLine);
+          if (!file.trim() || !note.trim() || !Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) {
+            setOut("Fill file, a valid line range (start ≤ end), and your finding note first.");
+            return;
+          }
+          void api.findings(props.runId, [{ file: file.trim(), startLine: start, endLine: end, note: note.trim() }])
+            .then((r) => { setRecorded(true); setOut(`Your finding is recorded (${r.recorded}). AI review is now unlocked.`); })
+            .catch((e: unknown) => setOut(friendlyError(e)));
         }}
       >
         Submit finding
       </button>{" "}
-      <button className="secondary" onClick={() => void api.aiReview(props.runId).then((r) => setOut(`AI: ${r.valid.length} valid, ${r.rejected.length} rejected — ${r.valid.map((f) => `${f.file}:${f.startLine} ${f.note}`).join(" | ") || "none"}`)).catch((e: unknown) => setOut(String(e)))}>
-        Run AI review
+      <button
+        className="secondary"
+        disabled={!recorded || busyAi}
+        title={recorded ? "Run the AI reviewer now" : "Submit your own finding first"}
+        onClick={() => {
+          setBusyAi(true);
+          void api.aiReview(props.runId)
+            .then((r) => {
+              setAiOut([
+                `${r.valid.length} valid finding(s), ${r.rejected.length} rejected as not grounded in the diff.`,
+                ...r.valid.map((f) => `${f.file}:${f.startLine}-${f.endLine} [${f.severity}] ${f.note}`),
+              ]);
+            })
+            .catch((e: unknown) => setAiOut([friendlyError(e)]))
+            .finally(() => setBusyAi(false));
+        }}
+      >
+        {busyAi ? "Reviewing…" : "Run AI review"}
       </button>
+      {!recorded && <p className="muted">AI review stays locked until your finding is recorded.</p>}
       {out && <p>{out}</p>}
+      {aiOut.length > 0 && (
+        <div>
+          {aiOut.map((line) => <p key={line}>{line}</p>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -62,19 +130,33 @@ function SummaryBox(props: { runId: string }): React.JSX.Element {
   const [out, setOut] = useState("");
   return (
     <div>
-      <button onClick={() => void api.summary(props.runId).then((r) => setOut(`${r.summary.title} — unverified: ${r.summary.unverified.join(", ") || "none"}`)).catch((e: unknown) => setOut(String(e)))}>Write summary</button>
+      <button onClick={() => void api.summary(props.runId).then((r) => setOut(`${r.summary.title} — unverified: ${r.summary.unverified.join(", ") || "none"}`)).catch((e: unknown) => setOut(friendlyError(e)))}>Write summary</button>
       {out && <p>{out}</p>}
     </div>
   );
 }
 
-function ReceiptBox(props: { runId: string }): React.JSX.Element {
+function ReceiptBox(props: { runId: string; canIssue: boolean; blockedReason?: string }): React.JSX.Element {
   const [trailer, setTrailer] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <div>
-      <button onClick={() => void api.receipt(props.runId).then((r) => { setTrailer(r.trailer); setError(""); }).catch((e: unknown) => setError(String(e)))}>Issue receipt</button>
-      {trailer && <p className="muted">{trailer}</p>}
+      {!props.canIssue && props.blockedReason && <p className="muted">{props.blockedReason}</p>}
+      <button
+        disabled={busy}
+        onClick={() => {
+          if (!props.canIssue) { setError(props.blockedReason ?? "Receipt is not available yet."); return; }
+          setBusy(true);
+          void api.receipt(props.runId)
+            .then((r) => { setTrailer(r.trailer); setError(""); })
+            .catch((e: unknown) => setError(friendlyError(e)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Issuing…" : "Issue receipt"}
+      </button>
+      {trailer && <p className="muted">Issued and stored for this run: {trailer}</p>}
       {error && <p className="error">{error}</p>}
     </div>
   );
@@ -88,7 +170,7 @@ function CanaryBox(props: { runId: string }): React.JSX.Element {
     <div>
       <p className="muted">Canary = a deliberate fake bug used to test reviewer attention. Arming plants a subtle mutation in a throwaway copy (never your repo) and keeps it only if execution proves it changes behavior. ACCEPTED = a valid canary a careful reviewer could catch — hide it among the hunks and see if it gets flagged. REJECTED = the mutation changed nothing observable, so it was discarded. Pick the file to mutate, then arm.</p>
       <input type="text" value={file} onChange={(e) => setFile(e.target.value)} />
-      <button disabled={busy} onClick={() => { setBusy(true); void api.canary(props.runId, file).then((r) => setResult(`${r.verdict.accepted ? "ACCEPTED" : "REJECTED"} ${r.candidate.operator} @${r.candidate.file}:${r.candidate.line} — ${r.verdict.reason}`)).catch((e: unknown) => setResult(String(e))).finally(() => setBusy(false)); }}>
+      <button disabled={busy} onClick={() => { setBusy(true); void api.canary(props.runId, file).then((r) => setResult(`${r.verdict.accepted ? "ACCEPTED" : "REJECTED"} ${r.candidate.operator} @${r.candidate.file}:${r.candidate.line} — ${r.verdict.reason}`)).catch((e: unknown) => setResult(friendlyError(e))).finally(() => setBusy(false)); }}>
         {busy ? "Validating…" : "Arm canary"}
       </button>
       {result && <p>{result}</p>}
@@ -110,6 +192,8 @@ export function RunView(props: { runId: string }): React.JSX.Element {
   const [agentText, setAgentText] = useState("");
   const [override, setOverride] = useState("");
   const [error, setError] = useState("");
+  const [askBusyId, setAskBusyId] = useState<string | null>(null);
+  const [askErrors, setAskErrors] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -138,8 +222,14 @@ export function RunView(props: { runId: string }): React.JSX.Element {
     return () => clearInterval(t);
   }, [refresh, status]);
 
-  const toggle = (r: string): void =>
+  const toggle = (r: string): void => {
+    setNothingElse(false);
     setSelected((s) => (s.includes(r) ? s.filter((x) => x !== r) : [...s, r]));
+  };
+  const toggleNothingElse = (checked: boolean): void => {
+    setNothingElse(checked);
+    if (checked) setSelected([]);
+  };
 
   if (status === "loading" || status === "running")
     return (
@@ -171,9 +261,9 @@ export function RunView(props: { runId: string }): React.JSX.Element {
         <h2>Blast map {locked ? "(revealed)" : "(predict first)"}</h2>
         {!locked && (
           <p className="muted">
-            Your only input: tick <strong>Will change?</strong> for each route you expect to behave differently
-            after this change, tick <strong>Nothing else changes</strong> if you believe only those routes change,
-            then press <strong>Lock prediction</strong>. Outcomes stay hidden until you commit.
+            Your only input, in two mutually exclusive forms: either tick <strong>Will change?</strong> for each
+            route you expect to behave differently, or tick <strong>Nothing changes at all</strong> if you expect
+            zero routes to change. Then press <strong>Lock prediction</strong>. Outcomes stay hidden until you commit.
           </p>
         )}
         {!locked && checklist.map((c) => <p key={c} className="pill calibration">{c}</p>)}
@@ -195,7 +285,7 @@ export function RunView(props: { runId: string }): React.JSX.Element {
                 <td>{n.exercised ? "yes" : "no"}</td>
                 {locked && <td>{n.status ? <StatusPill status={n.status} /> : "—"}</td>}
                 {!locked && (
-                  <td><input type="checkbox" checked={selected.includes(n.routeId)} onChange={() => toggle(n.routeId)} aria-label={n.routeId} /></td>
+                  <td><input type="checkbox" checked={selected.includes(n.routeId)} disabled={nothingElse} onChange={() => toggle(n.routeId)} aria-label={n.routeId} /></td>
                 )}
               </tr>
             ))}
@@ -203,8 +293,8 @@ export function RunView(props: { runId: string }): React.JSX.Element {
         </table>
         {!locked && (
           <div style={{ marginTop: 8 }}>
-            <label><input type="checkbox" checked={nothingElse} onChange={(e) => setNothingElse(e.target.checked)} /> Nothing else changes</label>
-            <button onClick={() => void api.predict(runId, { routeIds: selected, nothingElse }).then(refresh).catch((e: unknown) => setError(String(e)))}>Lock prediction</button>
+            <label><input type="checkbox" checked={nothingElse} onChange={(e) => toggleNothingElse(e.target.checked)} /> Nothing changes at all (no route will change)</label>
+            <button onClick={() => void api.predict(runId, { routeIds: selected, nothingElse }).then(refresh).catch((e: unknown) => setError(friendlyError(e)))}>Lock prediction</button>
           </div>
         )}
         {locked && <StatusLegend />}
@@ -233,7 +323,8 @@ export function RunView(props: { runId: string }): React.JSX.Element {
             {!reveal.score.passed && !reveal.overrideReason && (
               <div style={{ marginTop: 8 }}>
                 <input type="text" value={override} onChange={(e) => setOverride(e.target.value)} placeholder="Override reason (recorded)" />
-                <button className="secondary" onClick={() => void api.override(runId, override).then(refresh)}>Override with reason</button>
+                <button className="secondary" disabled={!override.trim()} onClick={() => void api.override(runId, override.trim()).then(refresh).catch((e: unknown) => setError(friendlyError(e)))}>Override with reason</button>
+                <p className="muted">A recorded override is also what unblocks the receipt below when the gate has not passed.</p>
               </div>
             )}
             {reveal.overrideReason && <p className="muted">Overridden: {reveal.overrideReason}</p>}
@@ -252,13 +343,17 @@ export function RunView(props: { runId: string }): React.JSX.Element {
               </tbody>
             </table>
             <textarea rows={3} value={agentText} onChange={(e) => setAgentText(e.target.value)} placeholder="Agent final summary…" />
-            <button onClick={() => void api.agentMessage(runId, agentText).then(refresh).catch((e: unknown) => setError(String(e)))}>Extract + verify claims</button>
+            <button onClick={() => void api.agentMessage(runId, agentText).then(refresh).catch((e: unknown) => setError(friendlyError(e)))}>Extract + verify claims</button>
           </section>
 
           <section>
             <h2>Receipt</h2>
             <p className="muted">A signed, tamper-evident record of this exact diff and scenario suite. It proves what was observed (and at which assurance tier, L0–L3), not that the code is correct. Verify it later with the CI action.</p>
-            <ReceiptBox runId={runId} />
+            <ReceiptBox
+              runId={runId}
+              canIssue={reveal.score.passed || Boolean(reveal.overrideReason)}
+              blockedReason="Receipt is blocked until the gate passes — or you record an override reason under Gate score above. That keeps a failed prediction from being silently receipted."
+            />
           </section>
 
           <section>
@@ -279,13 +374,28 @@ export function RunView(props: { runId: string }): React.JSX.Element {
           <section>
             <h2>Questions ({reveal.questions.length})</h2>
             <p className="muted">Evidence-anchored questions raised by contradictions and surprises. Ask agent sends the question with its evidence to the agent (read-only); its reply is re-checked: RESOLVED = reply&apos;s claims hold, CONTESTED = they still conflict, OPEN/ASKED = awaiting an answer.</p>
+            {reveal.questions.length === 0 && <p className="muted">No questions were generated for this run. Questions appear when replay contradicts a claim or finds a surprise.</p>}
             {reveal.questions.map((q) => (
               <div key={q.id} style={{ borderTop: "1px solid #16130e", padding: "6px 0" }}>
                 <p><strong>[{q.template}]</strong> {q.text} <span className="muted">({q.status})</span></p>
-                {q.answer && <p className="muted">A: {q.answer}</p>}
+                {q.answer && <p className="muted" style={{ whiteSpace: "pre-wrap" }}>{formatAnswer(q.answer)}</p>}
                 {(q.status === "OPEN" || q.status === "ASKED") && (
-                  <button className="secondary" onClick={() => void api.ask(runId, q.id).then(refresh)}>Ask agent</button>
+                  <button
+                    className="secondary"
+                    disabled={askBusyId === q.id}
+                    onClick={() => {
+                      setAskBusyId(q.id);
+                      setAskErrors((prev) => ({ ...prev, [q.id]: "" }));
+                      void api.ask(runId, q.id)
+                        .then(refresh)
+                        .catch((e: unknown) => setAskErrors((prev) => ({ ...prev, [q.id]: friendlyError(e) })))
+                        .finally(() => setAskBusyId(null));
+                    }}
+                  >
+                    {askBusyId === q.id ? "Asking…" : "Ask agent"}
+                  </button>
                 )}
+                {askErrors[q.id] && <p className="error">{askErrors[q.id]}</p>}
               </div>
             ))}
           </section>

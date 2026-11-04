@@ -35,6 +35,9 @@ ENV HOSTED_SUBJECT_DIR=/subject/json-server
 # This image is the judge demo: default to the prepared json-server subject
 # so a manual Docker deploy cannot fall back to asking for local directories.
 ENV RIPPLEWITNESS_LOCKED_RUN="{\"repoPath\":\"/subject/json-server\",\"baseRef\":\"rw-base\",\"headRef\":\"rw-head\",\"scenariosDir\":\"/app/docs/real-repo/scenarios\",\"seedDbRel\":\"seed/seed.db\",\"appStart\":[\"node\",\"--experimental-strip-types\",\"src/bin.ts\",\"rw-db.json\"]}"
+# No live agent session exists inside this demo image; Ask uses the clearly
+# labeled scripted stub so judges can exercise the ask/re-verify loop.
+ENV RIPPLEWITNESS_AGENT_SESSION=stub
 RUN node scripts/prepare-hosted.mjs /subject/json-server
 EXPOSE 5173
 CMD ["sh", "-c", "corepack pnpm --filter @ripplewitness/server exec tsx src/cli.ts serve & corepack pnpm --filter @ripplewitness/web exec vite preview --port ${PORT:-5173} --host 0.0.0.0; wait"]

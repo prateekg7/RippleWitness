@@ -18,67 +18,67 @@ export const STATUS_HELP: Record<string, string> = {
 
 const FEATURE_GUIDE: { name: string; needs: string; use: string }[] = [
   {
-    name: "Blast map and prediction gate",
-    needs: "Before the reveal, your judgment: tick each route you expect to change. Tick “Nothing else changes” only if you also claim every unticked route will stay the same. Then lock the prediction.",
+    name: "Prediction before reveal",
+    needs: "Before the reveal, your judgment, in one of two forms: tick each route you expect to change, or tick “Nothing changes at all” if you expect zero routes to change. The two forms are mutually exclusive. Then lock the prediction.",
     use: "Turn a vague code review into a testable prediction. After locking, execution grades what you caught, what you missed, and which worries were unnecessary.",
   },
   {
-    name: "Diff",
+    name: "Reading the diff",
     needs: "Your normal code-reading attention. Move hunk by hunk and compare the old and new code.",
     use: "Understand exactly what the author changed. The blast map then adds what static analysis predicts and what execution actually observed beyond the edited lines.",
   },
   {
-    name: "Gate score and missed routes",
+    name: "Scoring and missed routes",
     needs: "No new input after locking. If you intentionally override a failed gate, it asks for a written reason.",
     use: "Recall tells you how many truly changed routes you caught; precision tells you how many of your predictions were right. The missed-route table explains whether the gap came from coverage, static blindness, or your prediction.",
   },
   {
-    name: "Auto-forge coverage",
+    name: "Closing coverage gaps",
     needs: "One click when routes remain UNVERIFIED. It may take time while candidate probes are replayed.",
     use: "Generate additional safe probes for uncovered routes. Only probes that behave deterministically are kept, so more of the map can move from “unknown” to observed evidence.",
   },
   {
-    name: "Agent claims",
+    name: "Checking agent claims",
     needs: "Paste the coding agent’s final summary, then choose “Extract + verify claims.”",
     use: "Split the agent’s story into checkable statements and compare each one with replay evidence. SUPPORTED means evidence agrees; CONTRADICTED means it disagrees; UNVERIFIABLE means there is not enough evidence either way.",
   },
   {
-    name: "Questions for the agent",
-    needs: "Choose “Ask agent” on an open question. If no live agent session is linked, leave the question open rather than treating silence as an answer.",
-    use: "Send the agent a question together with the concrete evidence that raised it. Its reply is extracted and checked again: RESOLVED means the reply holds up; CONTESTED means it still conflicts with the evidence.",
+    name: "Asking the agent",
+    needs: "Choose “Ask agent” on an open question and wait for the labeled reply. Locally this can be a live agent session; the hosted demo uses a clearly labeled scripted stub because no original agent session lives in the container.",
+    use: "Send the agent a question together with the concrete evidence that raised it. Its reply is extracted and checked again: RESOLVED means the reply holds up; CONTESTED means it still conflicts with the evidence; OPEN means a follow-up is still needed. Never treat an unavailable agent as if it had answered.",
   },
   {
-    name: "Receipt",
+    name: "Signed receipt",
     needs: "Choose “Issue receipt” when you want a portable record of the completed review.",
     use: "Create a signed, tamper-evident record tied to the exact code versions and scenario suite. L3 means full static-plus-replay evidence, L2 means replay without static claims, and L0 means static-only because replay failed. A receipt proves what was observed—not that the code is universally correct.",
   },
   {
-    name: "Canary",
+    name: "Canary attention test",
     needs: "A file to mutate, then choose “Arm canary.” The mutation is planted only in a disposable copy; it never writes to the repository being reviewed.",
     use: "Test reviewer attention with a deliberate fake bug. ACCEPTED means execution proved the planted change alters behavior, so a careful reviewer could catch it. REJECTED means the mutation had no observable effect and was discarded. Arm one, then see whether the reviewer flags it during review.",
   },
   {
-    name: "Blind-first review",
-    needs: "Your own finding first, written as file:start-end plus a note. Only after that should you run the AI reviewer.",
+    name: "Independent-first review",
+    needs: "Your own finding first: a file, a line range from the Diff, and a note. The AI review button stays locked until that is recorded. AI findings additionally need a configured Meta model on the deployment.",
     use: "Form an independent judgment before AI suggestions can anchor you. Then compare your finding with the AI’s findings instead of starting from them.",
   },
   {
-    name: "Summary",
+    name: "PR summary from evidence",
     needs: "One click; it should be based on the diff and observations, not on the agent’s self-description.",
     use: "Get an evidence-grounded PR title and a reminder of routes that remain unverified, so uncertainty is visible instead of polished away.",
   },
   {
-    name: "Predict-then-run",
+    name: "Function output prediction",
     needs: "A function identifier, JSON arguments, and your predicted output for both the base and head versions.",
     use: "Make a small, precise prediction and have execution grade it. This is useful when a helper or ML function matters more than an HTTP route.",
   },
   {
-    name: "Causal ablation",
+    name: "Testing a suspected cause",
     needs: "The ID of a changed route, then choose Plan and run one proposed ablation.",
     use: "Test whether a suspected shared helper, event, table, or other coupling actually causes an unexpected change. If neutralizing the coupling makes the difference disappear, the cause is confirmed by intervention—not just correlation.",
   },
   {
-    name: "Model usage",
+    name: "LLM usage audit",
     needs: "Nothing. This is read-only transparency information.",
     use: "Audit how much model help was used: calls, tokens, schema repairs, retries, cache hits, and fallbacks. Scores and verdicts are computed in code; model output never decides them.",
   },
@@ -107,7 +107,7 @@ function actionsFor(stage: GuideStage, hosted: boolean): string[] {
       return [
         "Use Static to see what the code graph can reach and Exercised to see what a scenario actually ran.",
         "Tick “Will change?” for every route you expect to behave differently.",
-        "Tick “Nothing else changes” only if that stronger claim is intentional, then press Lock prediction.",
+        "Or tick “Nothing changes at all” only if you expect zero changed routes, then press Lock prediction.",
       ];
     case "revealed":
       return [

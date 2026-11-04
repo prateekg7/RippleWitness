@@ -547,9 +547,13 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
   app.post("/api/runs/:id/receipt", requireLock, async (req: Request, res: Response) => {
     const body = z.object({ algorithm: z.enum(["hmac", "ed25519"]).optional() }).safeParse(req.body ?? {});
     if (!body.success) return res.status(400).json({ error: "invalid_input" });
-    const out = await issueReceipt(db, opts.home, req.params.id as string, body.data.algorithm ? { algorithm: body.data.algorithm } : undefined);
-    if (!out.ok) return res.status(out.status).json({ error: out.error });
-    return res.json({ receipt: out.receipt, trailer: trailerValue(out.receipt) });
+    try {
+      const out = await issueReceipt(db, opts.home, req.params.id as string, body.data.algorithm ? { algorithm: body.data.algorithm } : undefined);
+      if (!out.ok) return res.status(out.status).json({ error: out.error });
+      return res.json({ receipt: out.receipt, trailer: trailerValue(out.receipt) });
+    } catch {
+      return res.status(500).json({ error: "receipt_failed" });
+    }
   });
 
   app.get("/api/runs/:id/receipt", requireLock, (req: Request, res: Response) => {
@@ -564,7 +568,7 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
     if (!parsed.success || (parsed.data.file && parsed.data.file.split("/").includes(".."))) {
       return res.status(400).json({ error: "invalid_input" });
     }
-    const inputs = getArtifact<{ repoPath: string; baseRef: string; headRef: string; scenariosDir: string; appDir?: string; seedDbRel?: string }>(
+    const inputs = getArtifact<{ repoPath: string; baseRef: string; headRef: string; scenariosDir: string; appDir?: string; seedDbRel?: string; appStart?: string[] }>(
       db,
       runId,
       "inputs",
@@ -607,6 +611,7 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
       scenariosDir: inputs.scenariosDir,
       seedDbRel: inputs.seedDbRel ?? "seed/seed.db",
       ...(inputs.appDir ? { appDir: inputs.appDir } : {}),
+      ...(inputs.appStart ? { appStart: inputs.appStart } : {}),
       workRoot: `${opts.workRoot}/canary-${runId}`,
     });
     putArtifact(db, runId, "canary", { candidate: { ...candidate, patched: undefined }, verdict });
@@ -665,7 +670,12 @@ export function createServer(db: Database.Database, opts: ServerOptions): Expres
     const inputs = getArtifact<{ repoPath: string; baseRef: string; headRef: string }>(db, runId, "inputs");
     if (!inputs) return res.status(409).json({ error: "inputs_missing" });
     const { execa } = await import("execa");
-    const { stdout: diff } = await execa("git", ["diff", inputs.baseRef, inputs.headRef], { cwd: inputs.repoPath });
+    let diff: string;
+    try {
+      diff = (await execa("git", ["diff", inputs.baseRef, inputs.headRef], { cwd: inputs.repoPath })).stdout;
+    } catch {
+      return res.status(503).json({ error: "reviewer_failed" });
+    }
     let raw: unknown;
     try {
       raw = await opts.reviewer(diff, runId);

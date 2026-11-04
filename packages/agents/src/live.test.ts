@@ -16,7 +16,9 @@ describe.runIf(LIVE)("meta client live smoke (RIPPLEWITNESS_LIVE=1)", () => {
         "Reply with exactly the requested JSON and nothing else.",
         'Reply with exactly: {"pong":true}',
         z.object({ pong: z.boolean() }).passthrough(),
-        50,
+        // muse-spark spends completion tokens on reasoning first; a tiny
+        // budget returns empty content. 500 matches product-scale calls.
+        500,
       );
       expect(out.pong).toBe(true);
     },
