@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { envText } from "./env.js";
 
 /**
  * Content-hash response cache for Meta calls (TRD §5.2, dev cost saver).
@@ -41,6 +42,6 @@ export class FileCache {
 export function resolveCacheDir(explicit?: string): string | null {
   if (process.env.RIPPLEWITNESS_NO_CACHE === "1") return null;
   if (explicit) return explicit;
-  const home = process.env.RIPPLEWITNESS_HOME;
+  const home = envText(process.env.RIPPLEWITNESS_HOME);
   return home ? join(home, "cache") : null;
 }

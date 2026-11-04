@@ -44,7 +44,7 @@ export async function extractGoGraph(appRoot: string): Promise<StaticGraph> {
   const { stdout } = await execFileP("go", ["run", programPath(), appRoot], {
     timeout: 120000,
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, GOCACHE: process.env.GOCACHE ?? join(tmpdir(), "rw-go-build") },
+    env: { ...process.env, GOCACHE: process.env.GOCACHE || join(tmpdir(), "rw-go-build") },
   });
   return GraphSchema.parse(JSON.parse(stdout)) as StaticGraph;
 }

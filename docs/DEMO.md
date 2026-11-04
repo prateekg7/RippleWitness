@@ -1,6 +1,12 @@
 # Demo script (2 minutes, PR-00 hero)
 
-Setup (once):
+> Two ways to set up — don't mix their values. `corepack pnpm demo` builds
+> the scratch repo itself and **prints** the Repo path, base `main`, head
+> **`pr`**, scenarios path, and seed `seed/seed.db`; copy those verbatim.
+> The manual setup below builds its own repo at `/tmp/demo-subj` with head
+> branch **`pr-00`**. A head ref from one flow does not exist in the other.
+
+Setup (once, manual alternative):
 
 ```sh
 corepack pnpm i && corepack pnpm demo:prepare

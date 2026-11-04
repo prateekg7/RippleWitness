@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { DEFAULT_BASE_URL, DEFAULT_MODEL, fallbackChainLabels } from "@ripplewitness/agents";
+import { DEFAULT_BASE_URL, DEFAULT_MODEL, envText, fallbackChainLabels } from "@ripplewitness/agents";
 
 const run = promisify(execFile);
 
@@ -30,7 +30,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   });
   const git = await versionOf("git", ["--version"]);
   checks.push({ name: "git", ok: git !== null, detail: git ?? "git not found (need >=2.40)" });
-  const musePath = env.MUSE_BINARY_PATH ?? "muse";
+  const musePath = envText(env.MUSE_BINARY_PATH) ?? "muse";
   const muse = await versionOf(musePath, ["--version"]);
   checks.push({
     name: "muse",
@@ -43,8 +43,8 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     detail: env.META_API_KEY ? "META_API_KEY is set (value not shown)" : "META_API_KEY unset — NO-LLM mode",
   });
   const primary = {
-    model: env.META_MODEL ?? DEFAULT_MODEL,
-    baseUrl: env.META_BASE_URL ?? DEFAULT_BASE_URL,
+    model: envText(env.META_MODEL) ?? DEFAULT_MODEL,
+    baseUrl: envText(env.META_BASE_URL) ?? DEFAULT_BASE_URL,
   };
   let fallbackDetail = "";
   try {
@@ -56,7 +56,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   checks.push({
     name: "meta_model",
     ok: true,
-    detail: `model=${env.META_MODEL ?? `${DEFAULT_MODEL} (default)`} endpoint=${env.META_BASE_URL ?? `${DEFAULT_BASE_URL} (default)`}${fallbackDetail}`,
+    detail: `model=${envText(env.META_MODEL) ?? `${DEFAULT_MODEL} (default)`} endpoint=${envText(env.META_BASE_URL) ?? `${DEFAULT_BASE_URL} (default)`}${fallbackDetail}`,
   });
   const docker = await versionOf("docker", ["--version"]);
   const unshare = await versionOf("unshare", ["--version"]);

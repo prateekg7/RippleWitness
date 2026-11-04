@@ -11,6 +11,14 @@ describe("doctor (FR-22 stub)", () => {
     expect(byName.meta_model?.detail).toContain("muse-spark-1.3 (default)");
     const custom = await runDoctor({ META_MODEL: "m", META_BASE_URL: "https://e.example" } as NodeJS.ProcessEnv);
     expect(custom.find((c) => c.name === "meta_model")?.detail).toBe("model=m endpoint=https://e.example");
+    // Blank .env placeholders (from `set -a; source .env`) must behave as unset,
+    // not as empty overrides: an empty MUSE_BINARY_PATH must not shadow `muse`.
+    const blank = await runDoctor({ MUSE_BINARY_PATH: "", META_MODEL: "", META_BASE_URL: "" } as NodeJS.ProcessEnv);
+    const blankModel = blank.find((c) => c.name === "meta_model")?.detail ?? "";
+    expect(blankModel).toContain("muse-spark-1.3 (default)");
+    expect(blankModel).toContain("https://api.meta.ai/v1 (default)");
+    const blankMuse = blank.find((c) => c.name === "muse")?.detail ?? "";
+    expect(blankMuse.startsWith(" not found")).toBe(false);
     const mismatched = await runDoctor({
       META_FALLBACK_MODELS: "open-one,open-two",
       META_FALLBACK_BASE_URLS: "http://127.0.0.1:8000/v1",

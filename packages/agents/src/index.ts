@@ -3,6 +3,7 @@ export type { AgentAnswer, AgentMode, AgentSessionPort, ExecOptions, TranscriptT
 export { ExecSession, MockSession, findLatestSessionJsonl, loadTranscript, parseExecJsonl } from "./session.js";
 export { treeFingerprint, treeUnchanged } from "./readonly.js";
 export { redactSecrets } from "./redactor.js";
+export { envText } from "./env.js";
 export { cacheKey, FileCache, resolveCacheDir } from "./cache.js";
 export {
   DEFAULT_BASE_URL,

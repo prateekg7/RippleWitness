@@ -9,7 +9,8 @@ against the portal clock.
 - [ ] Demo video (2 min, beats in `docs/DEMO.md`); shows only work done during
       the event window (net-new rule, secondary source — confirm in Rules).
 - [ ] Description: novelty sentence from PRD §11 only; numbers only from
-      `eval/results.md`; limitations from `AUDIT.md` §7.
+      `eval/results.md`; limitations from `docs/real-repo-run.md`
+      (remaining limitations) and `AUDIT.md` §7 (author-local, not in repo).
 - [ ] Third-party/OSS disclosure per the Rules format (all deps are pinned in
       `pnpm-lock.yaml`; no vendored code).
 - [ ] AI-assistance disclosure per the Rules format (built with Muse Code;

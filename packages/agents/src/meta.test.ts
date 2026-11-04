@@ -299,6 +299,22 @@ describe("meta transport hardening (CT-AGE-03)", () => {
     ).toThrow(/same length/i);
   });
 
+  it("treats blank META_MODEL/META_BASE_URL placeholders as unset", () => {
+    const oldModel = process.env.META_MODEL;
+    const oldBaseUrl = process.env.META_BASE_URL;
+    process.env.META_MODEL = "";
+    process.env.META_BASE_URL = "   ";
+    try {
+      const c = new MetaClient({ apiKey: "t" });
+      expect(c.getModelChain()).toEqual(["muse-spark-1.3"]);
+    } finally {
+      if (oldModel === undefined) delete process.env.META_MODEL;
+      else process.env.META_MODEL = oldModel;
+      if (oldBaseUrl === undefined) delete process.env.META_BASE_URL;
+      else process.env.META_BASE_URL = oldBaseUrl;
+    }
+  });
+
   it("reads an ordered fallback chain from the environment", () => {
     const oldModels = process.env.META_FALLBACK_MODELS;
     const oldBaseUrls = process.env.META_FALLBACK_BASE_URLS;
