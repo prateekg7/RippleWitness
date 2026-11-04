@@ -28,6 +28,8 @@ RUN corepack pnpm --filter @ripplewitness/web run build
 
 FROM build AS runtime
 ENV NODE_ENV=production
+# HF Spaces expects the app on 7860; Render injects PORT, compose pins 5173.
+ENV PORT=7860
 ENV RIPPLEWITNESS_HOME=/data
 ENV HOSTED_SUBJECT_DIR=/subject/json-server
 RUN node scripts/prepare-hosted.mjs /subject/json-server

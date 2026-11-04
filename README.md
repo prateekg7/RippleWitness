@@ -1,3 +1,13 @@
+---
+title: RippleWitness Demo
+emoji: 🌊
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # RippleWitness
 
 A local-first review cockpit for Muse Code pull requests. It fuses a static

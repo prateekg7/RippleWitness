@@ -6,6 +6,7 @@ services:
       # Web UI (proxies /api to the server on 4400 inside the container).
       - "5173:5173"
     environment:
+      PORT: "5173"
       # Locked hosted demo: every analyze is forced to this subject.
       # Paths are inside the container; see docs/HOSTING.md.
       RIPPLEWITNESS_LOCKED_RUN: '{"repoPath":"/subject/json-server","baseRef":"rw-base","headRef":"rw-head","scenariosDir":"/app/docs/real-repo/scenarios","seedDbRel":"seed/seed.db","appStart":["node","--experimental-strip-types","src/bin.ts","rw-db.json"]}'

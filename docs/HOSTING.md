@@ -20,13 +20,20 @@ the instance at other repositories or paths.
 
 ## What a judge does
 
-1. Open the URL. The New review form is pre-filled and locked.
-2. Optionally open the **recorded run** listed under the form first.
-3. Press **Analyze**, wait for `ready`.
-4. Tick the routes they believe changed (the recorded answer:
-   `route:GET /definitely-missing`), lock the prediction.
-5. Read the graded reveal (CONFIRMED/CLEARED/UNVERIFIED), open a question,
-   and read the report with its `RippleWitness-Receipt:` trailer.
+No parameters to enter: subject repo, base ref (`rw-base`), head ref
+(`rw-head`), scenarios dir, seed DB, and start command are pre-filled
+and locked on the server.
+
+1. Open the URL. Optionally open the **recorded run** listed under the
+   form first.
+2. Press **Analyze**, wait for `ready`.
+3. On the Blast map, tick **Will change?** for each route they expect
+   to behave differently, tick **Nothing else changes** if they believe
+   only those routes change, then **Lock prediction**. (The recorded
+   answer is `route:GET /definitely-missing`.)
+4. Read the graded reveal (CONFIRMED/CLEARED/UNVERIFIED), open a
+   question, and read the report with its
+   `RippleWitness-Receipt:` trailer.
 
 ## What runs
 
@@ -52,18 +59,57 @@ curl -s http://127.0.0.1:5173/api/config   # shows the locked run
 Put it behind your platform's HTTPS (VPS reverse proxy, Fly.io,
 Render, a tunnel — your choice). The app itself is plain HTTP on 5173.
 
-### Render (Blueprint, no code changes needed)
+### Hugging Face Spaces (free, recommended for the demo link)
 
-`render.yaml` at the repo root defines the service: Docker runtime,
-`/data` persistent disk, the locked-run env, and `META_API_KEY` as a
-dashboard-entered secret (`sync: false` — never stored in git).
+Spaces run a real Docker container on a public URL, no card required.
+The repo already carries the Space metadata (README frontmatter:
+`sdk: docker`, `app_port: 7860`; the image defaults `PORT=7860`).
 
-1. Push this branch so Render can see `render.yaml`.
+1. Create a free account at huggingface.co.
+2. **New Space** → name it e.g. `ripplewitness`, SDK **Docker**,
+   template **Blank**, hardware **CPU basic (free)**, public.
+3. Clone the empty Space repo, copy this checkout into it (excluding
+   `.git`, `node_modules`, `.ripplewitness`), commit, push:
+
+   ```sh
+   git clone https://huggingface.co/spaces/<you>/ripplewitness hf-space
+   rsync -a --exclude .git --exclude node_modules --exclude .ripplewitness ./ hf-space/
+   cd hf-space && git add -A && git commit -m "RippleWitness demo" && git push
+   ```
+
+4. In the Space **Settings → Variables and secrets**, add:
+   - Variable `RIPPLEWITNESS_LOCKED_RUN` = the JSON from
+     `docker-compose.yml`.
+   - Variable `RIPPLEWITNESS_HOME` = `/data`.
+   - Secret `META_API_KEY` = your key (optional; stored encrypted,
+     never printed or committed).
+5. The Space builds the Dockerfile and serves at
+   `https://huggingface.co/spaces/<you>/ripplewitness` (direct app:
+   `https://<you>-ripplewitness.hf.space`). That's the judge URL.
+
+Free-tier realities: the Space sleeps after ~48h idle and wakes in
+about a minute on first visit; storage is ephemeral, so runs reset on
+restart (the seeded run recreates itself on boot). Fine for a demo;
+not a production service.
+
+### Render (free tier, with or without Blueprint)
+
+The paid part was never Blueprint — it was the persistent disk.
+`render.yaml` now pins `plan: free` with no disk: state is ephemeral
+(runs reset on restart; the seeded run recreates itself on boot) and
+the service spins down after ~15 min idle (~1 min to wake).
+
+Blueprint path:
+
+1. Push `main` so Render can see `render.yaml`.
 2. Render dashboard → **New +** → **Blueprint** → select the repo.
-3. Confirm the plan (persistent disks need a paid instance type),
-   enter `META_API_KEY` when prompted (optional), **Apply**.
-4. When the deploy is live, open the `*.onrender.com` URL: the form is
-   pre-filled, and the seeded run is listed under it.
+3. Enter `META_API_KEY` when prompted (optional), **Apply**.
+4. Open the `*.onrender.com` URL.
+
+Manual path (no Blueprint): **New +** → **Web Service** → connect the
+repo → Runtime **Docker**, instance type **Free** → add the same env
+vars by hand (`RIPPLEWITNESS_LOCKED_RUN` JSON from `docker-compose.yml`,
+`RIPPLEWITNESS_HOME=/data`, optional `META_API_KEY`) → **Create**.
 
 Render injects `PORT`; the web layer already honors it (verified
 locally with `PORT=10000`). `render.yaml` tracks `main`, so deploy
