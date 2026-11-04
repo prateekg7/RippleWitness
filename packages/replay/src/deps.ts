@@ -78,6 +78,11 @@ export async function ensureDeps(
     symlinkSync(join(sourceDir, "node_modules"), link, "dir");
     return { strategy: "symlink", elapsedMs: Date.now() - started };
   }
+  // Manifest-less node subjects (single-file stdlib servers) have nothing
+  // to install; a frozen install would fail with ERR_PNPM_NO_PKG_MANIFEST.
+  if (!existsSync(join(worktreeDir, "package.json"))) {
+    return { strategy: "none", elapsedMs: Date.now() - started };
+  }
   const launcher = pnpmLauncher();
   await execa(launcher[0] as string, [...launcher.slice(1), "install", "--frozen-lockfile"], {
     cwd: worktreeDir,

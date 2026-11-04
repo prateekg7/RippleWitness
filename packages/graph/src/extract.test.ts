@@ -111,6 +111,27 @@ describe("static graph extractor (C-01)", () => {
     expect(g.nodes.length).toBeGreaterThanOrEqual(0);
   });
 
+  it("IT-GR-07: query-param .get() calls are not routes; app.use fallback impacts parameterized routes", () => {
+    const DYN = join(HERE, "fixtures", "shop-dynamic");
+    const g = extractStaticGraph(DYN);
+    const routes = g.nodes.filter((n) => n.kind === "route").map((n) => n.id);
+    expect(routes).toContain("route:GET /:name");
+    expect(routes).toContain("route:GET /:name/:id");
+    // URLSearchParams.get("_page") / .get("_where") are lookups, not registrations.
+    expect(routes.some((r) => r.includes("_page") || r.includes("_where"))).toBe(false);
+    // A diff inside the terminal app.use('/:name') fallback handler must
+    // statically impact the parameterized routes that fall through to it.
+    const src = readFileSync(join(DYN, "src", "app.ts"), "utf8").split("\n");
+    const fallbackLine = src.findIndex((l) => l.includes("fallback-render")) + 1;
+    expect(fallbackLine).toBeGreaterThan(0);
+    const impact = computeImpact(g, [{ file: "src/app.ts", lines: [fallbackLine] }]);
+    expect(impact.staticImpacted).toContain("route:GET /:name");
+    expect(impact.staticImpacted).toContain("route:GET /:name/:id");
+    // The root route is not under the '/:name' mount: a :param segment
+    // must not match an empty segment.
+    expect(impact.staticImpacted).not.toContain("route:GET /");
+  });
+
   it("IT-GR-06: same tree yields identical JSON bytes", () => {
     const a = JSON.stringify(extractStaticGraph(SHOP));
     const b = JSON.stringify(extractStaticGraph(SHOP));

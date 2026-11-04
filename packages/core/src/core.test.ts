@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fuseRoutes } from "./fuse.js";
+import { fuseRoutes, inheritStaticImpact, routePatternMatches } from "./fuse.js";
 import { scoreGate } from "./score.js";
 import type { ClaimEvidence, RouteEvidence } from "./types.js";
 
@@ -124,6 +124,50 @@ describe("gate scoring (C-05)", () => {
   it("rejects invalid predictions", () => {
     expect(() => scoreGate({ routeIds: [""], nothingElse: false }, [], cfg)).toThrow();
     expect(() => scoreGate(null, [], cfg)).toThrow();
+  });
+});
+
+describe("static pattern inheritance (real-repo fix)", () => {
+  it("parameterized static patterns match concrete evidence routes segment-wise", () => {
+    expect(routePatternMatches("route:GET /:name", "route:GET /definitely-missing")).toBe(true);
+    expect(routePatternMatches("route:GET /:name/:id", "route:GET /posts/:id")).toBe(true);
+    expect(routePatternMatches("route:GET /:name/:id", "route:GET /posts/42")).toBe(true);
+    expect(routePatternMatches("route:GET /:name", "route:GET /posts/42")).toBe(false);
+    expect(routePatternMatches("route:GET /:name", "route:POST /posts")).toBe(false);
+    expect(routePatternMatches("route:GET /products/:sku", "route:GET /orders/9")).toBe(false);
+    expect(routePatternMatches("route:GET /:name", "route:GET /")).toBe(false);
+  });
+
+  it("concrete route inherits impact and witness path from its static pattern", () => {
+    const impact = {
+      staticImpacted: ["route:GET /:name", "fn:src/app.ts:createApp"],
+      inDiff: ["fn:src/app.ts:createApp"],
+      paths: { "route:GET /:name": ["handler:src/app.ts:use /:name#h0", "route:GET /:name"] },
+    };
+    const inherited = inheritStaticImpact("route:GET /definitely-missing", impact);
+    expect(inherited.staticImpacted).toBe(true);
+    expect(inherited.inDiff).toBe(false);
+    expect(inherited.impactPath).toEqual(["handler:src/app.ts:use /:name#h0", "route:GET /:name", "route:GET /definitely-missing"]);
+    // Fused with inherited impact, the observed change is CONFIRMED, not SURPRISE.
+    const out = fuseRoutes(
+      [ev({ routeId: "route:GET /definitely-missing", exercised: true, observedChanged: true, staticImpacted: inherited.staticImpacted })],
+      [],
+    );
+    expect(out[0]?.status).toBe("CONFIRMED");
+  });
+
+  it("exact static matches keep their own path; unmatched routes inherit nothing", () => {
+    const impact = {
+      staticImpacted: ["route:GET /posts"],
+      inDiff: ["route:GET /posts"],
+      paths: { "route:GET /posts": ["route:GET /posts"] },
+    };
+    expect(inheritStaticImpact("route:GET /posts", impact)).toEqual({
+      staticImpacted: true,
+      inDiff: true,
+      impactPath: ["route:GET /posts"],
+    });
+    expect(inheritStaticImpact("route:GET /other", impact)).toEqual({ staticImpacted: false, inDiff: false, impactPath: [] });
   });
 });
 

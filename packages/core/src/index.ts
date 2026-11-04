@@ -12,6 +12,6 @@ export type {
   ReviewMode,
   RouteEvidence,
 } from "./types.js";
-export { fuseRoutes } from "./fuse.js";
+export { fuseRoutes, inheritStaticImpact, routePatternMatches } from "./fuse.js";
 export type { Prediction } from "./score.js";
 export { DEFAULT_GATE, parsePrediction, scoreGate } from "./score.js";

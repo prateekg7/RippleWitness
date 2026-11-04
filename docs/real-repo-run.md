@@ -1,7 +1,8 @@
 # Real-repo run: typicode/json-server (not our code, not our fixtures)
 
 A genuine open-source change, reviewed end-to-end by the shipped pipeline.
-Recorded 2026-11-03 against this repo's working tree (all gates green).
+First recorded 2026-11-03; re-run 2026-11-04 after the fixes described
+under “What the first run exposed” below. Report output is from the re-run.
 
 ## The change under review
 
@@ -55,7 +56,7 @@ Read the upstream diff, predicted exactly one behavioral change — the
 { "routeIds": ["route:GET /definitely-missing"], "nothingElse": false }
 ```
 
-## What execution said (verbatim report output)
+## What execution said (verbatim report output, 2026-11-04 re-run)
 
 ## RippleWitness report — `rw-base..rw-head`
 
@@ -69,15 +70,26 @@ Status: **ready** · mode: full · assurance: **L3**
 
 | route | status | exercised | static | surprise |
 | --- | --- | --- | --- | --- |
-| route:GET /comments | QUIET | yes | no | no |
-| route:GET /definitely-missing | SURPRISE | yes | no | yes |
-| route:GET /health | QUIET | yes | no | no |
-| route:GET /posts | QUIET | yes | no | no |
-| route:GET /posts/:id | QUIET | yes | no | no |
+| route:DELETE /:name/:id | UNVERIFIED | no | yes | no |
+| route:GET /comments | CLEARED | yes | yes | no |
+| route:GET /definitely-missing | CONFIRMED | yes | yes | no |
+| route:GET /health | CLEARED | yes | yes | no |
+| route:GET /posts | CLEARED | yes | yes | no |
+| route:GET /posts/:id | CLEARED | yes | yes | no |
+| route:PATCH /:name | UNVERIFIED | no | yes | no |
+| route:PATCH /:name/:id | UNVERIFIED | no | yes | no |
+| route:POST /:name | UNVERIFIED | no | yes | no |
+| route:PUT /:name | UNVERIFIED | no | yes | no |
+| route:PUT /:name/:id | UNVERIFIED | no | yes | no |
 
 ### Unverified
 
-None — every fused route was exercised.
+- `route:DELETE /:name/:id`
+- `route:PATCH /:name`
+- `route:PATCH /:name/:id`
+- `route:POST /:name`
+- `route:PUT /:name`
+- `route:PUT /:name/:id`
 
 ### Claims
 
@@ -85,11 +97,15 @@ No extracted claims.
 
 ### Open questions
 
-- **7f0fa67f-65b4-40c6-946c-a789b929fccf** [OPEN] `route:GET /definitely-missing` — SURPRISE_RIPPLE
+- **48837036-1f6b-475e-8c0f-4068c806d1f4** [OPEN] `route:PUT /:name` — SCOPE_CREEP
+- **5fc7a7a1-0dd3-42df-89fb-d40c43e76df8** [OPEN] `route:POST /:name` — SCOPE_CREEP
+- **9df5ea0c-c1ad-4f6b-b70b-f1e3a83ef97e** [OPEN] `route:DELETE /:name/:id` — SCOPE_CREEP
+- **bfd386fd-a2b1-450c-ae3d-febaa5f36416** [OPEN] `route:PATCH /:name/:id` — SCOPE_CREEP
+- **e174f1fb-a114-4617-b8af-33c51f9e7d24** [OPEN] `route:PATCH /:name` — SCOPE_CREEP
 
 ---
 
-`RippleWitness-Receipt: ed25519:84c6fc8a44392114:380eab073aa4`
+`RippleWitness-Receipt: ed25519:1e73db159df35971:81d41a561cff`
 _Rendered from observed evidence. Agent prose is never evidence._
 
 ## Receipt, verified the way CI verifies it
@@ -121,16 +137,37 @@ bug was found by this run, not by the test suite.
 Only the first row is third-party code; the rest prove the polyglot
 pipeline end-to-end on fixtures we control. We do not claim otherwise.
 
-## Honest limitations this run exposed
+## What the first run exposed — and the fixes (2026-11-04)
 
-- **Static blindness is real.** json-server registers routes from db keys
-  at runtime; the static pass finds none of them, so every observed change
-  is SURPRISE by construction and the fusion's static half contributes
-  nothing. Replay plus the scenario suite carried the review. On subjects
-  like this, treat RippleWitness as execution-led (the report's tier
-  stays L3 because replay was deterministic, not because the map helped).
+The 2026-11-03 run labeled the changed route SURPRISE and still claimed
+L3. Inspection showed three code defects, all fixed and regression-tested:
+
+- The extractor counted one-arg lookups (`URLSearchParams.get("_where")`)
+  as routes. Route discovery now requires a `/`-path plus a handler
+  argument (IT-GR-07).
+- The changed line lives in the terminal `app.use('/:name')` fallback,
+  which the graph never modeled. Path-mounted `app.use` handlers are now
+  shared handler nodes linked from every route under the mount prefix, so
+  a diff inside one statically impacts those routes (IT-GR-07).
+- The pipeline exact-matched static pattern ids (`GET /:name`) against
+  concrete evidence ids (`GET /definitely-missing`), so no impact ever
+  transferred. Concrete routes now inherit impact (and the witness path)
+  from a segment-wise matching static pattern (`inheritStaticImpact` in
+  `packages/core`), and a static pass finding zero routes in **any**
+  language now runs DYNAMIC-ONLY at tier L2 instead of only Python
+  (IT-GR-JS-04). A manifest-less Node subject also replays now
+  (dependency strategy `none` instead of a doomed frozen install).
+
+In the re-run above, the changed route is CONFIRMED, exercised unchanged
+routes are CLEARED, and the tier L3 is earned: the static half genuinely
+contributed. The write-method patterns (POST/PUT/PATCH/DELETE) share the
+same fallback handler, so they honestly surface as UNVERIFIED — the five
+probes only exercise GET.
+
+## Remaining limitations
+
 - **Five hand-written probes** covered the change. Nobody recorded
   production traffic; `ripplewitness import-har` exists for teams that
   have it.
-- **One repo, one commit pair, one run.** This is an existence proof on
+- **One repo, one commit pair.** This is an existence proof on
   third-party code, not a benchmark.
