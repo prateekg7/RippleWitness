@@ -6,6 +6,15 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "./app.js";
 import { getArtifact, openStore } from "./store.js";
 
+/** Analyses run fire-and-forget; never close the store under them (CI timing). */
+async function settle(db: ReturnType<typeof openStore>): Promise<void> {
+  for (let i = 0; i < 120; i += 1) {
+    const row = db.prepare("SELECT COUNT(*) AS c FROM runs WHERE status = 'running'").get() as { c: number };
+    if (row.c === 0) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 describe("locked hosted run", () => {
   it("forces locked subject fields regardless of the request body", async () => {
     const db = openStore(join(mkdtempSync(join(tmpdir(), "rw-locked-")), "runs.db"));
@@ -30,6 +39,7 @@ describe("locked hosted run", () => {
     expect(inputs?.repoPath).toBe("/locked/repo");
     expect(inputs?.baseRef).toBe("rw-base");
     expect(inputs?.headRef).toBe("rw-head");
+    await settle(db);
     db.close();
   });
 
@@ -52,6 +62,7 @@ describe("locked hosted run", () => {
     }
     expect(statuses.slice(0, 6)).toEqual([202, 202, 202, 202, 202, 202]);
     expect(statuses[6]).toBe(429);
+    await settle(db);
     db.close();
   });
 });
