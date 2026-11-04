@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { JudgeGuide } from "../components/JudgeGuide.js";
 
 export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX.Element {
   const [repoPath, setRepoPath] = useState("");
@@ -57,12 +58,15 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
   };
 
   return (
+    <div className="guide-layout">
+      <div className="guide-content">
     <section>
       <h2>New review</h2>
       {locked && (
         <p className="muted">
-          Hosted demo: the subject repository and refs are locked to this curated run — just press Analyze, then lock
-          your prediction before the reveal.
+          Hosted demo: the subject repository, refs, scenarios, seed, and start command below are pre-filled and
+          locked — you do not need to enter any parameters. Press <strong>Analyze</strong>, wait for the run, then
+          lock your prediction on the next screen before the reveal.
         </p>
       )}
       <label>
@@ -111,5 +115,8 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
         </div>
       )}
     </section>
+      </div>
+      <JudgeGuide stage="start" hosted={locked} />
+    </div>
   );
 }

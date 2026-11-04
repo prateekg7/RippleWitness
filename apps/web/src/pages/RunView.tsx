@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import type { MapNode, Reveal } from "../api.js";
+import { JudgeGuide, STATUS_HELP } from "../components/JudgeGuide.js";
 
 /** Status glyphs: statuses stay distinguishable without color (E2E-07). */
 const STATUS_GLYPH: Record<string, string> = {
@@ -16,7 +17,7 @@ const STATUS_GLYPH: Record<string, string> = {
 function StatusPill(props: { status: string }): React.JSX.Element {
   const glyph = STATUS_GLYPH[props.status] ?? "▪";
   return (
-    <span className={`pill ${props.status.toLowerCase()}`}>
+    <span className={`pill ${props.status.toLowerCase()}`} title={STATUS_HELP[props.status] ?? props.status}>
       <span aria-hidden="true">{glyph} </span>
       {props.status}
     </span>
@@ -27,6 +28,7 @@ function StatusLegend(): React.JSX.Element {
   return (
     <p className="muted">
       {Object.entries(STATUS_GLYPH).map(([s, g]) => `${g} ${s}`).join(" · ")}
+      {" "}— definitions are in the side guide; hover any status pill for its meaning.
     </p>
   );
 }
@@ -84,7 +86,7 @@ function CanaryBox(props: { runId: string }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   return (
     <div>
-      <p className="muted">Plant a validated mutation to test your own attention. Never touches the repo.</p>
+      <p className="muted">Canary = a deliberate fake bug used to test reviewer attention. Arming plants a subtle mutation in a throwaway copy (never your repo) and keeps it only if execution proves it changes behavior. ACCEPTED = a valid canary a careful reviewer could catch — hide it among the hunks and see if it gets flagged. REJECTED = the mutation changed nothing observable, so it was discarded. Pick the file to mutate, then arm.</p>
       <input type="text" value={file} onChange={(e) => setFile(e.target.value)} />
       <button disabled={busy} onClick={() => { setBusy(true); void api.canary(props.runId, file).then((r) => setResult(`${r.verdict.accepted ? "ACCEPTED" : "REJECTED"} ${r.candidate.operator} @${r.candidate.file}:${r.candidate.line} — ${r.verdict.reason}`)).catch((e: unknown) => setResult(String(e))).finally(() => setBusy(false)); }}>
         {busy ? "Validating…" : "Arm canary"}
@@ -139,16 +141,41 @@ export function RunView(props: { runId: string }): React.JSX.Element {
   const toggle = (r: string): void =>
     setSelected((s) => (s.includes(r) ? s.filter((x) => x !== r) : [...s, r]));
 
-  if (status === "loading" || status === "running") return <section><h2>Analyzing…</h2><p className="muted">graph + replay running</p></section>;
+  if (status === "loading" || status === "running")
+    return (
+      <div className="guide-layout">
+        <div className="guide-content"><section><h2>Analyzing…</h2><p className="muted">graph + replay running</p></section></div>
+        <JudgeGuide stage="loading" />
+      </div>
+    );
   if (status === "static-only")
-    return <section><h2>Static only</h2><p className="error">Replay failed; the gate is disabled. Diff and static map still available.</p></section>;
-  if (status === "failed") return <section><h2>Failed</h2><p className="error">Analysis failed.</p></section>;
+    return (
+      <div className="guide-layout">
+        <div className="guide-content"><section><h2>Static only</h2><p className="error">Replay failed; the gate is disabled. Diff and static map still available.</p></section></div>
+        <JudgeGuide stage="static-only" />
+      </div>
+    );
+  if (status === "failed")
+    return (
+      <div className="guide-layout">
+        <div className="guide-content"><section><h2>Failed</h2><p className="error">Analysis failed.</p></section></div>
+        <JudgeGuide stage="failed" />
+      </div>
+    );
 
   return (
-    <>
+    <div className="guide-layout">
+      <div className="guide-content">
       {error && <section><p className="error">{error}</p></section>}
       <section>
         <h2>Blast map {locked ? "(revealed)" : "(predict first)"}</h2>
+        {!locked && (
+          <p className="muted">
+            Your only input: tick <strong>Will change?</strong> for each route you expect to behave differently
+            after this change, tick <strong>Nothing else changes</strong> if you believe only those routes change,
+            then press <strong>Lock prediction</strong>. Outcomes stay hidden until you commit.
+          </p>
+        )}
         {!locked && checklist.map((c) => <p key={c} className="pill calibration">{c}</p>)}
         {reviewMode === "dynamic-only" && (
           <p className="pill dynamic-only">DYNAMIC-ONLY: no static pass ran — statuses report observed outcomes only, never static claims.</p>
@@ -192,6 +219,7 @@ export function RunView(props: { runId: string }): React.JSX.Element {
         <>
           <section>
             <h2>Gate score</h2>
+            <p className="muted">Your prediction, graded by execution. Recall = of the routes that really changed, how many you caught. Precision = of your predictions, how many were right. PASSED needs both at the bar; override only with a recorded reason.</p>
             <p>
               recall {reveal.score.recall.toFixed(2)} · precision {reveal.score.precision.toFixed(2)} ·{" "}
               {reveal.score.passed ? "PASSED" : "MISSED"} ({reveal.score.passReason})
@@ -214,6 +242,7 @@ export function RunView(props: { runId: string }): React.JSX.Element {
 
           <section>
             <h2>Agent claims ({reveal.claims.length})</h2>
+            <p className="muted">What the agent said about its own change, checked against replay: SUPPORTED = evidence agrees · CONTRADICTED = evidence disagrees · UNVERIFIABLE = no evidence (not the same as false).</p>
             {reveal.claims.length === 0 && <p className="muted">No claims extracted. Paste the agent summary below (needs META_API_KEY).</p>}
             <table>
               <tbody>
@@ -228,6 +257,7 @@ export function RunView(props: { runId: string }): React.JSX.Element {
 
           <section>
             <h2>Receipt</h2>
+            <p className="muted">A signed, tamper-evident record of this exact diff and scenario suite. It proves what was observed (and at which assurance tier, L0–L3), not that the code is correct. Verify it later with the CI action.</p>
             <ReceiptBox runId={runId} />
           </section>
 
@@ -248,6 +278,7 @@ export function RunView(props: { runId: string }): React.JSX.Element {
 
           <section>
             <h2>Questions ({reveal.questions.length})</h2>
+            <p className="muted">Evidence-anchored questions raised by contradictions and surprises. Ask agent sends the question with its evidence to the agent (read-only); its reply is re-checked: RESOLVED = reply&apos;s claims hold, CONTESTED = they still conflict, OPEN/ASKED = awaiting an answer.</p>
             {reveal.questions.map((q) => (
               <div key={q.id} style={{ borderTop: "1px solid #16130e", padding: "6px 0" }}>
                 <p><strong>[{q.template}]</strong> {q.text} <span className="muted">({q.status})</span></p>
@@ -275,7 +306,9 @@ export function RunView(props: { runId: string }): React.JSX.Element {
           </section>
         </>
       )}
-    </>
+      </div>
+      <JudgeGuide stage={locked ? "revealed" : "predict"} />
+    </div>
   );
 }
 
@@ -434,6 +467,7 @@ function AutoForgeBox(props: { runId: string; refresh: () => Promise<void> }): R
   const [busy, setBusy] = useState(false);
   return (
     <div style={{ marginTop: 8 }}>
+      <p className="muted">Coverage gap? Auto-forge writes probe scenarios for UNVERIFIED routes and keeps only ones that replay identically twice, then the statuses recompute.</p>
       <button
         className="secondary"
         disabled={busy}
