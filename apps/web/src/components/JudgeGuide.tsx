@@ -90,7 +90,7 @@ function actionsFor(stage: GuideStage, hosted: boolean): string[] {
       return hosted
         ? [
             "Do not enter parameters: this hosted example is already fixed to a real json-server change.",
-            "Press Analyze, or open the recorded run listed below the form.",
+            "Choose “Open the prepared demo” for the fastest path, or “Run a fresh analysis” to watch the pipeline again.",
             "On the next screen, inspect the blast map and lock your prediction before looking for the verdicts.",
           ]
         : [

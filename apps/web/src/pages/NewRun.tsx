@@ -13,13 +13,23 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [runs, setRuns] = useState<{ id: string; status: string; createdAt: string }[]>([]);
 
   useEffect(() => {
-    api
-      .runs()
-      .then((r) => setRuns(r.runs))
-      .catch(() => {});
+    const loadRuns = (): void => {
+      api
+        .runs()
+        .then((r) => setRuns(r.runs))
+        .catch(() => {});
+    };
+    loadRuns();
+    // The hosted server may still be seeding its prepared run on first boot.
+    const timer = setInterval(loadRuns, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     api
       .config()
       .then((r) => {
@@ -32,7 +42,8 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
         if (r.lockedRun.seedDbRel) setSeedDbRel(r.lockedRun.seedDbRel);
         if (r.lockedRun.appStart) setAppStart(r.lockedRun.appStart.join(" "));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setConfigLoaded(true));
   }, []);
 
   const submit = async (): Promise<void> => {
@@ -57,18 +68,64 @@ export function NewRun(props: { onCreated: (runId: string) => void }): React.JSX
     }
   };
 
+  const demoRun = runs[0];
+
+  if (!configLoaded) {
+    return (
+      <div className="guide-layout">
+        <div className="guide-content">
+          <section>
+            <h2>Preparing demo…</h2>
+            <p className="muted">Checking whether this is the hosted judge demo or a local review.</p>
+          </section>
+        </div>
+        <JudgeGuide stage="loading" />
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div className="guide-layout">
+        <div className="guide-content">
+          <section>
+            <h2>Hosted judge demo</h2>
+            <p>
+              This demo is already configured for the real <strong>typicode/json-server</strong> change.
+              No repository path, directory, ref, scenario folder, or start command is needed from you.
+            </p>
+            <p className="muted">
+              Open the prepared run to make your prediction and see it graded by execution. Run a fresh
+              analysis only if you want to watch the complete pipeline run again.
+            </p>
+            {demoRun ? (
+              <div>
+                <button onClick={() => props.onCreated(demoRun.id)}>Open the prepared demo</button>{" "}
+                <button className="secondary" onClick={() => void submit()} disabled={busy}>
+                  {busy ? "Starting…" : "Run a fresh analysis"}
+                </button>
+                <p className="muted">
+                  Prepared run: {demoRun.status} · created {demoRun.createdAt}
+                </p>
+              </div>
+            ) : (
+              <button onClick={() => void submit()} disabled={busy}>
+                {busy ? "Starting demo analysis…" : "Analyze the demo"}
+              </button>
+            )}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </div>
+        <JudgeGuide stage="start" hosted />
+      </div>
+    );
+  }
+
   return (
     <div className="guide-layout">
       <div className="guide-content">
     <section>
       <h2>New review</h2>
-      {locked && (
-        <p className="muted">
-          Hosted demo: the subject repository, refs, scenarios, seed, and start command below are pre-filled and
-          locked — you do not need to enter any parameters. Press <strong>Analyze</strong>, wait for the run, then
-          lock your prediction on the next screen before the reveal.
-        </p>
-      )}
       <label>
         Subject repo path
         <input type="text" value={repoPath} disabled={locked} onChange={(e) => setRepoPath(e.target.value)} placeholder="/path/to/subject-repo" />

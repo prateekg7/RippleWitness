@@ -20,18 +20,17 @@ the instance at other repositories or paths.
 
 ## What a judge does
 
-No parameters to enter: subject repo, base ref (`rw-base`), head ref
-(`rw-head`), scenarios dir, seed DB, and start command are pre-filled
-and locked on the server.
+No parameters to enter and no directory form is shown: subject repo,
+base ref (`rw-base`), head ref (`rw-head`), scenarios dir, seed DB, and
+start command are locked inside the hosted image and server.
 
-1. Open the URL. Optionally open the **recorded run** listed under the
-   form first.
-2. Press **Analyze**, wait for `ready`.
-3. On the Blast map, tick **Will change?** for each route they expect
+1. Open the URL and choose **Open the prepared demo**. (Choose **Run a
+   fresh analysis** only to watch the complete pipeline run again.)
+2. On the Blast map, tick **Will change?** for each route they expect
    to behave differently, tick **Nothing else changes** if they believe
    only those routes change, then **Lock prediction**. (The recorded
    answer is `route:GET /definitely-missing`.)
-4. Read the graded reveal (CONFIRMED/CLEARED/UNVERIFIED), open a
+3. Read the graded reveal (CONFIRMED/CLEARED/UNVERIFIED), open a
    question, and read the report with its
    `RippleWitness-Receipt:` trailer.
 
@@ -45,8 +44,10 @@ and locked on the server.
   to the server on `4400` inside the container), run state in the
   `rw-data` volume (`RIPPLEWITNESS_HOME=/data`).
 - `RIPPLEWITNESS_LOCKED_RUN` forces every `/api/analyze` to the locked
-  subject; client-supplied paths/refs are ignored. Set it only via
-  environment, never commit a variant with secrets.
+  subject; client-supplied paths/refs are ignored. The Docker runtime
+  bakes in the public json-server demo value so a manual Docker deploy
+  cannot accidentally fall back to the local directory form. A platform
+  environment variable of the same name can still override it.
 
 ## Deploy (any Docker host)
 
@@ -77,12 +78,12 @@ The repo already carries the Space metadata (README frontmatter:
    cd hf-space && git add -A && git commit -m "RippleWitness demo" && git push
    ```
 
-4. In the Space **Settings → Variables and secrets**, add:
-   - Variable `RIPPLEWITNESS_LOCKED_RUN` = the JSON from
-     `docker-compose.yml`.
-   - Variable `RIPPLEWITNESS_HOME` = `/data`.
+4. Optional Space **Settings → Variables and secrets**:
    - Secret `META_API_KEY` = your key (optional; stored encrypted,
      never printed or committed).
+   - The locked demo subject and `RIPPLEWITNESS_HOME=/data` already have
+     Docker-image defaults; set variables of the same names only to
+     override them.
 5. The Space builds the Dockerfile and serves at
    `https://huggingface.co/spaces/<you>/ripplewitness` (direct app:
    `https://<you>-ripplewitness.hf.space`). That's the judge URL.
@@ -107,9 +108,9 @@ Blueprint path:
 4. Open the `*.onrender.com` URL.
 
 Manual path (no Blueprint): **New +** → **Web Service** → connect the
-repo → Runtime **Docker**, instance type **Free** → add the same env
-vars by hand (`RIPPLEWITNESS_LOCKED_RUN` JSON from `docker-compose.yml`,
-`RIPPLEWITNESS_HOME=/data`, optional `META_API_KEY`) → **Create**.
+repo → Runtime **Docker**, instance type **Free** → optionally add
+`META_API_KEY` → **Create**. Do not add repository or directory
+variables: the Docker image already defaults to the locked demo.
 
 Render injects `PORT`; the web layer already honors it (verified
 locally with `PORT=10000`). `render.yaml` tracks `main`, so deploy
