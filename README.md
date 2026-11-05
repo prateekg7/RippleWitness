@@ -1,5 +1,7 @@
 # RippleWitness
 
+> **Live demo for judges:** [https://ripplewitness.onrender.com/](https://ripplewitness.onrender.com/) — a locked, one-click showcase running the real `typicode/json-server` review. No setup needed: open the prepared run, lock a prediction, and see the graded reveal. (Free-tier hosting: ~1 min cold start after idle; local runs below are the full tool.)
+
 ## The problem
 
 AI coding agents write bigger diffs than any human can carefully review. The
@@ -218,6 +220,39 @@ gate, questions, receipt); LLM assistants honestly report `NO-LLM` mode.
 Reviewer config is optional: drop a `ripplewitness.config.yaml` in
 `$RIPPLEWITNESS_HOME` or the server's working directory — unknown keys fail
 fast at startup.
+
+## Test your own repo (step by step, local)
+
+Uses `pnpm dev` (server `:4400` + web `:5173`). Your repo stays untouched —
+RippleWitness reviews it from throwaway worktrees.
+
+```sh
+corepack pnpm i
+corepack pnpm dev        # leave running; open http://127.0.0.1:5173
+```
+
+1. **Commit both sides.** Your subject must be a git repo with the change
+   committed: a base ref (e.g. `main`) and a head ref (e.g. your PR
+   branch or `HEAD`).
+2. **Make it replayable.** The app must boot over HTTP with a start
+   command (default: `package.json` start) and a seed DB at
+   `seed/seed.db` (override in Advanced). See the subject contract in
+   [Scope](#scope--what-repos-it-can-review); the
+   [json-server run](docs/real-repo-run.md#harness-disclosed-identical-on-both-sides)
+   shows the minimal harness for a repo that lacks one.
+3. **Prepare scenarios.** A directory of JSON request probes (one file
+   per scenario). Copy the shape from
+   [`demo/scenarios`](demo/scenarios), or convert recorded traffic with
+   `ripplewitness import-har`.
+4. **New review.** In the web UI, fill Subject repo path, Base ref, Head
+   ref, Scenarios dir; expand Advanced only if you need App dir, Seed DB
+   path, or Start command. Press **Analyze**.
+5. **Predict, lock, reveal.** Tick the routes you expect to change (or
+   **Nothing else changes**), **Lock prediction**, then read the graded
+   blast radius, claims, questions, and receipt.
+6. **LLM features (optional).** Set `META_API_KEY` before `pnpm dev` for
+   claim extraction, Q&A, and summaries; without it the deterministic
+   core works and LLM stages report `NO-LLM`.
 
 ```sh
 corepack pnpm lint && corepack pnpm typecheck
