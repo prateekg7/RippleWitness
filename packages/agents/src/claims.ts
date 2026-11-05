@@ -4,7 +4,9 @@ import { DEFAULT_OUTPUT_TOKENS, type MetaCallContext, type MetaClient } from "./
 export const ClaimSchema = z.object({
   type: z.enum(["SCOPE", "BEHAVIOR_UNCHANGED", "IMPLEMENTED", "TESTS", "API_COMPAT"]),
   text: z.string().min(1),
-  sourceSpan: z.tuple([z.number(), z.number()]),
+  // Optional on the wire: the live model routinely omits it. extractClaims
+  // recomputes the span from the verbatim text before returning.
+  sourceSpan: z.tuple([z.number(), z.number()]).optional(),
   params: z.object({
     routes: z.array(z.string()).default([]),
     symbol: z.string().optional(),
@@ -39,8 +41,12 @@ export async function extractClaims(
   const user = `KNOWN_ROUTES: ${knownRoutes.join(", ")}\nCHANGED_FILES: ${changedFiles.join(", ")}\n<data>${agentMessage}</data>`;
   const out = await client.completeJson(SYSTEM, user, ClaimsSchema, DEFAULT_OUTPUT_TOKENS, { ...ctx, agent: "claimExtractor" });
   const known = new Set(knownRoutes);
-  return out.claims.map((c) => ({
-    ...c,
-    params: { ...c.params, routes: (c.params.routes ?? []).filter((r) => known.has(r)) },
-  }));
+  return out.claims.map((c) => {
+    const start = agentMessage.indexOf(c.text);
+    return {
+      ...c,
+      sourceSpan: c.sourceSpan ?? (start >= 0 ? [start, start + c.text.length] as [number, number] : [0, 0] as [number, number]),
+      params: { ...c.params, routes: (c.params.routes ?? []).filter((r) => known.has(r)) },
+    };
+  });
 }

@@ -15,8 +15,13 @@ export const DEFAULT_BASE_URL = "https://api.meta.ai/v1";
  * system prompt and JSON repair suffix.
  */
 export const USER_CONTENT_CHAR_LIMIT = 16000;
-/** Default `max_tokens`: agent outputs are small JSON objects (AGENTS.md Part B). */
-export const DEFAULT_OUTPUT_TOKENS = 1000;
+/**
+ * Default `max_tokens`. Agent outputs are small JSON objects, but muse-spark
+ * counts hidden reasoning against this budget: at 1,000 tokens it returns
+ * empty content on real prompts (observed live). 3,000 leaves room for
+ * minimal-effort reasoning (~1.1k) plus the JSON answer.
+ */
+export const DEFAULT_OUTPUT_TOKENS = 3000;
 
 /** Per-call HTTP timeout (TRD §5.2); override via META_TIMEOUT_MS. */
 export const DEFAULT_TIMEOUT_MS = 45000;
@@ -40,6 +45,13 @@ export interface MetaOptions {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  /**
+   * Reasoning effort sent to the model (default "minimal"). muse-spark is a
+   * reasoning model: without this cap it spends the entire max_tokens budget
+   * on hidden reasoning and returns empty content for structured tasks.
+   * Override with META_REASONING_EFFORT (blank keeps the minimal default).
+   */
+  reasoningEffort?: string;
   /** Optional ordered open-weight fallback targets; defaults to META_FALLBACK_* environment variables. */
   fallback?: MetaFallbackOptions | MetaFallbackOptions[];
   fetchImpl?: typeof fetch;
@@ -99,6 +111,7 @@ export class MetaClient {
   private readonly maxRetries: number;
   private readonly retryBaseMs: number;
   private readonly maxCallsPerRun: number;
+  private readonly reasoningEffort: string;
   private readonly sleepImpl: (ms: number) => Promise<void>;
   private readonly cache: FileCache | null;
   calls = 0;
@@ -121,6 +134,7 @@ export class MetaClient {
     this.maxRetries = opts.maxRetries ?? envNum("META_MAX_RETRIES", DEFAULT_MAX_RETRIES);
     this.retryBaseMs = opts.retryBaseMs ?? envNum("META_RETRY_BASE_MS", DEFAULT_RETRY_BASE_MS);
     this.maxCallsPerRun = opts.maxCallsPerRun ?? envNum("META_MAX_CALLS_PER_RUN", DEFAULT_MAX_CALLS_PER_RUN);
+    this.reasoningEffort = opts.reasoningEffort ?? envText(process.env.META_REASONING_EFFORT) ?? "minimal";
     this.sleepImpl = opts.sleepImpl ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     const cacheDir = resolveCacheDir(opts.cacheDir);
     this.cache = cacheDir ? new FileCache(cacheDir) : null;
@@ -148,14 +162,21 @@ export class MetaClient {
     outputLimit = DEFAULT_OUTPUT_TOKENS, ctx: MetaCallContext = {},
   ): Promise<T> {
     const started = Date.now();
-    const bodies = [
-      { system, user, repair: false },
-      { system, user: `${user}\n\nReturn only valid JSON matching the schema; fix prior errors.`, repair: true },
-    ];
     let lastError = "";
     const schemaVersion = ctx.schema ?? "v1";
     const unavailable = new Set<number>();
-    for (const attempt of bodies) {
+    // One repair retry, and it must name the actual validation error
+    // (AGENTS.md Part B): a generic "fix prior errors" leaves the model
+    // omitting the same required fields it dropped the first time.
+    for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
+      const attempt = {
+        system,
+        repair: attemptIndex === 1,
+        user:
+          attemptIndex === 1
+            ? `${user}\n\nReturn only valid JSON matching the schema; fix: ${lastError.slice(0, 1200)}`
+            : user,
+      };
       if (attempt.repair) this.metrics.schemaRepairs += 1;
       for (let targetIndex = 0; targetIndex < this.targets.length; targetIndex += 1) {
         if (unavailable.has(targetIndex)) continue;
@@ -190,6 +211,7 @@ export class MetaClient {
               model: target.model,
               temperature: 0,
               max_tokens: outputLimit,
+              ...(this.reasoningEffort ? { reasoning_effort: this.reasoningEffort } : {}),
               response_format: { type: "json_object" },
               messages: [
                 { role: "system", content: sentSystem },
@@ -229,7 +251,7 @@ export class MetaClient {
           if (this.cache && key) this.cache.set(key, content);
           return parsed.data;
         }
-        lastError = parsed.error.message;
+        lastError = content.trim() ? parsed.error.message : "empty model response (no content returned); return only the JSON object";
         break;
       }
     }

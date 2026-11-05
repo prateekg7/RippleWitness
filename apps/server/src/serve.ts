@@ -6,6 +6,7 @@ import type { ExplainerInput, SummaryInput } from "@ripplewitness/agents";
 import { createServer } from "./app.js";
 import type { ServerOptions } from "./app.js";
 import { loadConfig } from "./config.js";
+import { loadDotEnv } from "./envfile.js";
 import { log } from "./log.js";
 import { openStore } from "./store.js";
 
@@ -61,6 +62,8 @@ export function lockedRunFromEnv(): import("./app.js").LockedRunConfig | undefin
 }
 
 export function start(port = Number(envText(process.env.RIPPLEWITNESS_PORT) ?? 4400)): void {
+  const envPath = loadDotEnv();
+  if (envPath) log.info("env_loaded", { path: envPath });
   const home = envText(process.env.RIPPLEWITNESS_HOME) ?? join(process.cwd(), ".ripplewitness");
   const loaded = loadConfig(home);
   if (!loaded.ok) {
@@ -70,7 +73,7 @@ export function start(port = Number(envText(process.env.RIPPLEWITNESS_PORT) ?? 4
   const cfg = loaded.config;
   if (loaded.path) log.info("config_loaded", { path: loaded.path });
   const db = openStore(join(home, "runs.db"));
-  const key = process.env.META_API_KEY;
+  const key = envText(process.env.META_API_KEY);
   if (!key) {
     log.info("startup_no_llm", { detail: "META_API_KEY unset: deterministic core only" });
   }

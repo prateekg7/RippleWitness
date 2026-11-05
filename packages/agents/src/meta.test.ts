@@ -49,6 +49,21 @@ describe("meta transport hardening (CT-AGE-03)", () => {
     expect(c.getMetrics().transportRetries).toBe(1);
   });
 
+  it("sends reasoning_effort minimal by default so structured calls return content", async () => {
+    let body: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string, init: { body: string }) => {
+      body = JSON.parse(init.body) as Record<string, unknown>;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: "{\"answer\":\"yes\"}" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+      } as Response;
+    }) as typeof fetch;
+    const c = new MetaClient({ apiKey: "t", fetchImpl });
+    await expect(c.completeJson("s", "u", schema)).resolves.toEqual({ answer: "yes" });
+    expect(body.reasoning_effort).toBe("minimal");
+  });
+
   it("unwraps a double-encoded JSON string answer", async () => {
     const { fetchImpl } = seq([
       { ok: true, content: JSON.stringify(JSON.stringify({ answer: "yes" })) },
@@ -253,6 +268,21 @@ describe("meta transport hardening (CT-AGE-03)", () => {
     await expect(c.completeJson("s", "u", schema)).resolves.toEqual({ answer: "repaired" });
     expect(models).toEqual(["muse-spark-1.3", "muse-spark-1.3"]);
     expect(c.getMetrics().fallbackCalls).toBe(0);
+  });
+
+  it("names the validation error in the repair retry", async () => {
+    const users: string[] = [];
+    const contents = ['{"wrong":true}', '{"answer":"repaired"}'];
+    const fetchImpl = (async (_url: string, init: { body: string }) => {
+      const parsed = JSON.parse(init.body) as { messages: { content: string }[] };
+      users.push(parsed.messages[1]?.content ?? "");
+      const content = contents[Math.min(users.length - 1, contents.length - 1)] as string;
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) };
+    }) as unknown as typeof fetch;
+    const c = new MetaClient({ apiKey: "t", maxRetries: 0, sleepImpl: async () => {}, fetchImpl });
+    await expect(c.completeJson("s", "u", schema)).resolves.toEqual({ answer: "repaired" });
+    expect(users[1]).toContain("fix:");
+    expect(users[1]).toContain("answer");
   });
 
   it("does not use fallback for a non-retryable primary 400", async () => {

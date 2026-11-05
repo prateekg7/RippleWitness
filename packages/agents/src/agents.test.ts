@@ -131,6 +131,14 @@ describe("claim extractor (CT-CLM-01 fixtures)", () => {
     expect(claims[0]?.params.routes).toEqual(["route:POST /checkout"]);
     expect(claims[1]?.type).toBe("TESTS");
   });
+  it("recomputes sourceSpan when the model omits it", async () => {
+    const noSpan = JSON.stringify({
+      claims: [{ type: "SCOPE", text: "Only touches checkout.", params: { routes: ["route:POST /checkout"] } }],
+    });
+    const c = new MetaClient({ apiKey: "t", fetchImpl: mockFetch([{ ok: true, content: noSpan }]) });
+    const claims = await extractClaims(c, "Only touches checkout. Added 3 tests.", ["route:POST /checkout"], ["src/app.ts"]);
+    expect(claims[0]?.sourceSpan).toEqual([0, 22]);
+  });
   it("empty message yields empty claims", async () => {
     const c = new MetaClient({ apiKey: "t", fetchImpl: mockFetch([{ ok: true, content: '{"claims":[]}' }]) });
     await expect(extractClaims(c, "thanks!", [], [])).resolves.toEqual([]);
